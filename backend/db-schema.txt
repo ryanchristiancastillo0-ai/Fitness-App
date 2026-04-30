@@ -1,0 +1,175 @@
+-- ==========================================================
+-- DATABASE: fitnessapp
+-- RECOVERY SCRIPT FOR XAMPP WIPE
+-- ==========================================================
+
+-- 1. [TABLE: users] - Base profiles
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(255) NOT NULL,
+  `avatar_url` VARCHAR(255),
+  `is_online` BOOLEAN DEFAULT 0,
+  `fitness_goal` VARCHAR(255),
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 2. [TABLE: user_settings] - UI Preferences (Dark Mode)
+CREATE TABLE IF NOT EXISTS `user_settings` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `dark_mode` BOOLEAN DEFAULT 1,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 3. [TABLE: friendships] - Social connections for Messenger
+CREATE TABLE IF NOT EXISTS `friendships` (
+  `user_id` INT NOT NULL,
+  `friend_id` INT NOT NULL,
+  `status` VARCHAR(50) DEFAULT 'close_friend',
+  PRIMARY KEY (`user_id`, `friend_id`),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`friend_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4. [TABLE: messages] - Chat history & Location data
+CREATE TABLE IF NOT EXISTS `messages` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `sender_id` INT NOT NULL,
+  `receiver_id` INT NOT NULL,
+  `content` TEXT,
+  `latitude` DECIMAL(10, 8),
+  `longitude` DECIMAL(11, 8),
+  `is_read` BOOLEAN DEFAULT 0,
+  `sent_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`sender_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`receiver_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 5. [TABLE: plans] - Training Marketplace items
+CREATE TABLE IF NOT EXISTS `plans` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `title` VARCHAR(255) NOT NULL,
+  `tag` VARCHAR(100),
+  `image_seed` VARCHAR(100),
+  `description` TEXT,
+  `duration` VARCHAR(50),
+  `intensity` VARCHAR(50),
+  `target_focus` VARCHAR(100),
+  `price` DECIMAL(10, 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 6. [TABLE: user_plans] - PIVOT Table for purchased/enrolled plans
+CREATE TABLE IF NOT EXISTS `user_plans` (
+  `user_id` INT NOT NULL,
+  `plan_id` INT NOT NULL,
+  `enrolled_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`, `plan_id`),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`plan_id`) REFERENCES `plans`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 7. [TABLE: plan_contents] - Daily syllabus (Day 1, Day 2, etc.)
+CREATE TABLE IF NOT EXISTS `plan_contents` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `plan_id` INT NOT NULL,
+  `day_number` INT NOT NULL,
+  `title` VARCHAR(255) NOT NULL,
+  `activity_type` ENUM('Workout', 'Rest', 'Recovery', 'Test') DEFAULT 'Workout',
+  `description` TEXT,
+  `duration_mins` INT,
+  FOREIGN KEY (`plan_id`) REFERENCES `plans`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 8. [TABLE: daily_stats] - Dashboard metrics (Calories/Steps)
+CREATE TABLE IF NOT EXISTS `daily_stats` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `stat_date` DATE NOT NULL,
+  `calories_burned` INT DEFAULT 0,
+  `steps` INT DEFAULT 0,
+  `workout_duration_mins` INT DEFAULT 0,
+  `water_intake_ml` INT DEFAULT 0,
+  UNIQUE KEY `user_date_unique` (`user_id`, `stat_date`),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 9. [TABLE: biometric_logs] - Real-time HRV and Heart Rate
+CREATE TABLE IF NOT EXISTS `biometric_logs` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `hrv_value` INT,
+  `heart_rate` INT,
+  `recorded_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 10. [TABLE: performance_logs] - Analytics graphs data
+CREATE TABLE IF NOT EXISTS `performance_logs` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `metric_type` ENUM('vo2_max', 'hrv', 'metabolic_stress') NOT NULL,
+  `score` DECIMAL(10, 2),
+  `recorded_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 11. [TABLE: posture_alerts] - AI form correction history
+CREATE TABLE IF NOT EXISTS `posture_alerts` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `session_id` VARCHAR(100),
+  `issue_type` VARCHAR(100),
+  `feedback_text` TEXT,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 12. [TABLE: workout_sessions] - Timer/Session logs
+CREATE TABLE IF NOT EXISTS `workout_sessions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `plan_id` INT DEFAULT NULL,
+  `start_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `end_time` TIMESTAMP NULL,
+  `status` ENUM('active', 'completed', 'cancelled') DEFAULT 'active',
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE ai_insight_cache (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  data_signature VARCHAR(255) NOT NULL,
+  sleep_suggestion JSON NOT NULL,
+  activity_suggestion JSON NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_signature (user_id, data_signature),
+  INDEX idx_user_id (user_id)
+);
+-- ==========================================================
+-- INITIAL DATA SEEDING (To make the app run instantly)
+-- ==========================================================
+
+-- Add Your Main User Profile
+INSERT INTO `users` (`id`, `name`, `avatar_url`, `fitness_goal`) 
+VALUES (1, 'Ryan', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ryan', 'Information Technology Student');
+
+-- Enable Dark Mode for Ryan
+INSERT INTO `user_settings` (`user_id`, `dark_mode`) VALUES (1, 1);
+
+-- Add Default Marketplace Plans
+INSERT INTO `plans` (`id`, `title`, `tag`, `description`, `price`, `intensity`, `duration`, `target_focus`, `image_seed`) 
+VALUES 
+(1, 'VO2 Max Catalyst', 'Endurance', 'Push your aerobic ceiling and improve recovery rate.', 195.00, 'Extreme', '8 Weeks', 'Cardio', '10'),
+(2, 'Base Engine 2.0', 'Zone 2', 'Build a massive aerobic base and metabolic efficiency.', 145.00, 'Low', '12 Weeks', 'Longevity', '11');
+
+-- Add Sample Syllabus Content for Plan 1
+INSERT INTO `plan_contents` (`plan_id`, `day_number`, `title`, `description`, `duration_mins`) 
+VALUES 
+(1, 1, 'Threshold Intervals', '4x4 min at 90% max heart rate.', 45),
+(1, 2, 'Active Recovery', 'Low intensity walk or swim.', 30);
+
+-- Add some dummy data for the Dashboard Charts
+INSERT INTO `daily_stats` (`user_id`, `stat_date`, `calories_burned`, `steps`, `workout_duration_mins`) 
+VALUES (1, CURDATE(), 450, 8200, 45);
+
+INSERT INTO `biometric_logs` (`user_id`, `hrv_value`, `heart_rate`) 
+VALUES (1, 65, 72), (1, 68, 70), (1, 62, 75);
