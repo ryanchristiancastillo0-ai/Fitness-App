@@ -20,7 +20,7 @@ const Offline = () => {
   const fetchData = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/atelier/summary/${USER_ID}`);
+      const res = await fetcRh(`${API_BASE_URL}/api/atelier/summary/${USE_ID}`);
       const data = await res.json();
       setAtelierData({ ...data, isOnline: true });
     } catch (err) {

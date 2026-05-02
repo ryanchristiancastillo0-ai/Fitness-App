@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../../../config/port";
 import { Sidebar, Topbar, MobileNav } from "../../../components";
-
+import { useAuth } from "../../../hooks/useAuth";
 // ─────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────
@@ -25,20 +25,56 @@ const EMPTY_FORM = {
 };
 
 // ─────────────────────────────────────────────
+// IMAGE COMPRESSION (canvas-based, no deps)
+// ─────────────────────────────────────────────
+
+/**
+ * Compress a data-URL image to max 512px wide, JPEG 70% quality.
+ * Returns a base64 string (NO data URI prefix).
+ */
+function compressImageToBase64(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX_WIDTH = 512;
+      const scale     = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+      const canvas    = document.createElement("canvas");
+      canvas.width    = Math.round(img.width  * scale);
+      canvas.height   = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // toDataURL gives "data:image/jpeg;base64,XXXX" — strip the prefix
+      const compressed = canvas.toDataURL("image/jpeg", 0.7);
+      const base64Only = compressed.split(",")[1];
+      console.log(`[compress] Output base64 length: ${(base64Only.length / 1024).toFixed(1)} KB`);
+      resolve(base64Only);
+    };
+    img.onerror = () => reject(new Error("Failed to load image for compression"));
+    img.src = dataUrl;
+  });
+}
+
+// ─────────────────────────────────────────────
 // BACKEND / API FUNCTIONS
 // ─────────────────────────────────────────────
 
-/** POST /api/food-logs/analyze-pic — send base64 image, get AI nutrition estimate */
-async function apiAnalyzeFoodImage(base64Image) {
-  const base64Data = base64Image.includes(",") ? base64Image.split(",")[1] : base64Image;
+/** POST /api/food-logs/analyze-pic — send compressed base64, get AI nutrition estimate */
+async function apiAnalyzeFoodImage(dataUrl) {
+  // Compress on the frontend before sending
+  const base64Compressed = await compressImageToBase64(dataUrl);
+
+  console.log(`[apiAnalyzeFoodImage] Sending compressed base64, length: ${(base64Compressed.length / 1024).toFixed(1)} KB`);
+
   const res = await fetch(`${API_BASE_URL}/api/food-logs/analyze-pic`, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ base64Image: base64Data }),
+    // Send the plain base64 string (no data URI prefix)
+    body: JSON.stringify({ base64Image: base64Compressed }),
   });
+
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || "Analysis failed");
-  return data; // { food_name, calories, protein, carbs, fat, suggestion }
+  return data;
 }
 
 /** POST /api/food-logs/:userId — save a logged meal */
@@ -57,7 +93,7 @@ async function apiSaveFoodLog(userId, meal) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Could not save meal");
-  return data; // { message, id }
+  return data;
 }
 
 /** GET /api/food-logs/:userId — fetch meal history */
@@ -65,7 +101,7 @@ async function apiFetchFoodLogs(userId, limit = 20, offset = 0) {
   const res  = await fetch(`${API_BASE_URL}/api/food-logs/${userId}?limit=${limit}&offset=${offset}`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Could not fetch logs");
-  return data; // { records: [...], total }
+  return data;
 }
 
 /** GET /api/nutrition/:userId/:date — fetch daily macro totals */
@@ -74,7 +110,7 @@ async function apiFetchDailySummary(userId) {
   const res   = await fetch(`${API_BASE_URL}/api/nutrition/${userId}/${today}`);
   const data  = await res.json();
   if (!res.ok) throw new Error(data.error || "Could not fetch summary");
-  return data; // { total_calories, total_protein, total_carbs, total_fat }
+  return data;
 }
 
 // ─────────────────────────────────────────────
@@ -126,13 +162,14 @@ function Spinner() {
 
 function UploadSection({ onAnalyze, isAnalyzing }) {
   const fileInputRef = useRef(null);
-  const [preview,  setPreview]  = useState(null);
-  const [dragOver, setDragOver] = useState(false);
+  const [preview,       setPreview]       = useState(null);  // full data URL for <img>
+  const [dragOver,      setDragOver]      = useState(false);
+  const [compressing,   setCompressing]   = useState(false);
 
   const handleFile = (file) => {
     if (!file || !file.type.startsWith("image/")) return;
     const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target.result);
+    reader.onload = (e) => setPreview(e.target.result); // store full data URL for preview
     reader.readAsDataURL(file);
   };
 
@@ -147,11 +184,23 @@ function UploadSection({ onAnalyze, isAnalyzing }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleAnalyzeClick = async () => {
+    if (!preview || isAnalyzing || compressing) return;
+    setCompressing(true);
+    try {
+      // Pass the full data URL — apiAnalyzeFoodImage will compress it
+      await onAnalyze(preview);
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const busy = isAnalyzing || compressing;
+
   return (
     <div className="bg-[#1c1c1c] rounded-2xl p-4 sm:p-5 border border-white/5">
       <SectionLabel text="Meal Photo" />
 
-      {/* Drop zone */}
       <div
         className={`relative rounded-xl border-2 border-dashed transition-colors duration-200 cursor-pointer
           ${dragOver ? "border-[#D1FD52]/60 bg-[#D1FD52]/5" : "border-white/10 hover:border-white/20"}
@@ -192,23 +241,26 @@ function UploadSection({ onAnalyze, isAnalyzing }) {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"   // opens camera on mobile
+        capture="environment"
         className="hidden"
         onChange={(e) => handleFile(e.target.files[0])}
       />
 
       <button
-        onClick={() => onAnalyze(preview)}
-        disabled={isAnalyzing || !preview}
+        onClick={handleAnalyzeClick}
+        disabled={busy || !preview}
         className={`mt-3 sm:mt-4 w-full py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 touch-manipulation
-          ${isAnalyzing || !preview
+          ${busy || !preview
             ? "bg-white/10 text-white/30 cursor-not-allowed"
             : "bg-[#D1FD52] hover:bg-[#bfea3a] active:scale-[0.98] text-[#131313]"}`}
       >
-        {isAnalyzing ? (
+        {compressing ? (
           <span className="flex items-center justify-center gap-2">
-            <Spinner />
-            Analyzing with AI…
+            <Spinner /> Compressing…
+          </span>
+        ) : isAnalyzing ? (
+          <span className="flex items-center justify-center gap-2">
+            <Spinner /> Analyzing with AI…
           </span>
         ) : (
           "Analyze Meal"
@@ -282,8 +334,6 @@ function ManualLogForm({ onLog }) {
 
       {open && (
         <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-white/5 pt-3 sm:pt-4 space-y-3 sm:space-y-4">
-
-          {/* Meal Name + Emoji */}
           <div>
             <label className="block text-[11px] text-white/40 mb-1.5">Meal Name *</label>
             <div className="flex gap-2">
@@ -321,7 +371,6 @@ function ManualLogForm({ onLog }) {
             </div>
           </div>
 
-          {/* Meal Type */}
           <div>
             <label className="block text-[11px] text-white/40 mb-1.5">Meal Type</label>
             <div className="flex gap-1.5 sm:gap-2 flex-wrap">
@@ -341,7 +390,6 @@ function ManualLogForm({ onLog }) {
             </div>
           </div>
 
-          {/* Calories */}
           <div>
             <label className="block text-[11px] text-white/40 mb-1.5">Calories (kcal) *</label>
             <input
@@ -354,7 +402,6 @@ function ManualLogForm({ onLog }) {
             {errors.calories && <p className="text-red-400 text-[10px] mt-1">{errors.calories}</p>}
           </div>
 
-          {/* Macros — 3 col on all sizes (fields are simple enough) */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {[
               { key: "protein", label: "Protein (g)" },
@@ -446,7 +493,7 @@ function ResultCard({ result, onLog, isLogging }) {
 }
 
 // ─────────────────────────────────────────────
-// DAILY SUMMARY — fetches from GET /api/nutrition/:userId/:date
+// DAILY SUMMARY
 // ─────────────────────────────────────────────
 
 function DailySummary({ userId, refreshSeed }) {
@@ -465,7 +512,7 @@ function DailySummary({ userId, refreshSeed }) {
       .then(setSummary)
       .catch((err) => console.error("DailySummary fetch error:", err))
       .finally(() => setLoading(false));
-  }, [userId, refreshSeed]); // re-fetches when refreshSeed increments
+  }, [userId, refreshSeed]);
 
   const consumed  = Math.round(summary.total_calories);
   const remaining = Math.max(CALORIE_GOAL - consumed, 0);
@@ -485,12 +532,11 @@ function DailySummary({ userId, refreshSeed }) {
         {loading && <Spinner />}
       </div>
 
-      {/* Goal / Consumed / Remaining tiles */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-5">
         {[
-          { label: "Goal",               val: CALORIE_GOAL, cls: "text-[#e5e2e1]"                          },
-          { label: "Consumed",           val: consumed,     cls: over ? "text-red-400" : "text-[#D1FD52]"  },
-          { label: over ? "Over" : "Left", val: over ? "0" : remaining, cls: over ? "text-red-400" : "text-[#e5e2e1]" },
+          { label: "Goal",                 val: CALORIE_GOAL, cls: "text-[#e5e2e1]"                         },
+          { label: "Consumed",             val: consumed,     cls: over ? "text-red-400" : "text-[#D1FD52]" },
+          { label: over ? "Over" : "Left", val: over ? consumed - CALORIE_GOAL : remaining, cls: over ? "text-red-400" : "text-[#e5e2e1]" },
         ].map(({ label, val, cls }) => (
           <div key={label} className="bg-white/5 rounded-xl p-2 sm:p-3 text-center">
             <p className={`text-base sm:text-lg font-black ${cls}`}>{val}</p>
@@ -499,7 +545,6 @@ function DailySummary({ userId, refreshSeed }) {
         ))}
       </div>
 
-      {/* Calorie progress bar */}
       <div className="mb-4 sm:mb-5">
         <div className="flex justify-between text-[10px] text-white/40 mb-1.5">
           <span>Calorie progress</span>
@@ -513,7 +558,6 @@ function DailySummary({ userId, refreshSeed }) {
         </div>
       </div>
 
-      {/* Macro breakdown */}
       <div className="space-y-2 sm:space-y-3">
         {macroRows.map((r) => (
           <div key={r.label}>
@@ -535,7 +579,7 @@ function DailySummary({ userId, refreshSeed }) {
 }
 
 // ─────────────────────────────────────────────
-// MEAL HISTORY — fetches from GET /api/food-logs/:userId
+// MEAL HISTORY
 // ─────────────────────────────────────────────
 
 function MealHistory({ meals, loading }) {
@@ -587,7 +631,8 @@ function MealHistory({ meals, loading }) {
 const NutritionTracker = () => {
   const navigate   = useNavigate();
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-  const USER_ID    = storedUser?.id || storedUser?.user?.id || null;
+const { user, loading } = useAuth();
+const USER_ID = user?.id;
 
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [result,          setResult]          = useState(null);
@@ -596,15 +641,12 @@ const NutritionTracker = () => {
   const [history,         setHistory]         = useState([]);
   const [historyLoading,  setHistoryLoading]  = useState(false);
   const [toast,           setToast]           = useState(null);
-  // Increment to trigger DailySummary re-fetch without remounting
   const [summarySeed,     setSummarySeed]     = useState(0);
 
   useEffect(() => {
     if (!USER_ID) { navigate("/login"); return; }
     loadHistory();
   }, [USER_ID]);
-
-  // ── Data loaders ──────────────────────────────
 
   const loadHistory = async () => {
     setHistoryLoading(true);
@@ -618,31 +660,26 @@ const NutritionTracker = () => {
     }
   };
 
-  // ── Toast helper ─────────────────────────────
-
   const showToast = useCallback((msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   }, []);
 
-  // ── Handlers wired to API functions ──────────
-
-  /** Called by UploadSection after image is selected */
-  const handleAnalyze = async (base64Image) => {
-    if (!base64Image) return;
+  const handleAnalyze = async (dataUrl) => {
+    if (!dataUrl) return;
     setIsAnalyzing(true);
     setResult(null);
     try {
-      const data = await apiAnalyzeFoodImage(base64Image);
+      const data = await apiAnalyzeFoodImage(dataUrl);
       setResult(data);
     } catch (err) {
-      showToast("❌ Analysis failed. Try again.");
+      console.error("Analysis error:", err);
+      showToast(`❌ ${err.message || "Analysis failed. Try again."}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  /** Called by ResultCard "Log This Meal" button and ManualLogForm submit */
   const handleLog = async (meal) => {
     setIsLogging(true);
     try {
@@ -650,7 +687,7 @@ const NutritionTracker = () => {
       showToast(`✓ ${meal.food_name} saved!`);
       setResult(null);
       await loadHistory();
-      setSummarySeed((s) => s + 1); // triggers DailySummary re-fetch
+      setSummarySeed((s) => s + 1);
     } catch (err) {
       showToast(`❌ ${err.message || "Could not save meal."}`);
     } finally {
@@ -662,8 +699,6 @@ const NutritionTracker = () => {
 
   return (
     <div className="min-h-screen min-h-dvh bg-[#131313] text-[#e5e2e1] font-[Inter,sans-serif]">
-
-      {/* Sidebar — desktop only */}
       <div className="hidden md:block">
         <Sidebar
           onClick={() => { localStorage.clear(); navigate("/login"); }}
@@ -681,8 +716,6 @@ const NutritionTracker = () => {
                     ${sidebarExpanded ? "md:ml-[240px]" : "md:ml-[72px]"}`}
       >
         <div className="max-w-5xl mx-auto">
-
-          {/* Page heading */}
           <div className="mb-4 sm:mb-6 pt-2">
             <h1 className="text-xl sm:text-2xl font-black text-[#e5e2e1]">Nutrition Tracker</h1>
             <p className="text-white/40 text-xs sm:text-sm mt-0.5">
@@ -690,15 +723,7 @@ const NutritionTracker = () => {
             </p>
           </div>
 
-          {/*
-            Responsive grid:
-              mobile  → 1 column, everything stacks
-              md      → 2 columns
-              lg      → 3 columns (upload | summary | history)
-          */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-
-            {/* Column 1: Upload + AI result + Manual log */}
             <div className="flex flex-col gap-3 sm:gap-4">
               <UploadSection onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} />
               {result && (
@@ -707,21 +732,17 @@ const NutritionTracker = () => {
               <ManualLogForm onLog={handleLog} />
             </div>
 
-            {/* Column 2: Daily summary */}
             <div className="flex flex-col gap-3 sm:gap-4">
               <DailySummary userId={USER_ID} refreshSeed={summarySeed} />
             </div>
 
-            {/* Column 3: Meal history — on md, spans both cols so it sits below */}
             <div className="flex flex-col gap-3 sm:gap-4 md:col-span-2 lg:col-span-1">
               <MealHistory meals={history} loading={historyLoading} />
             </div>
-
           </div>
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
       <div className="md:hidden">
         <MobileNav />
       </div>
@@ -730,5 +751,6 @@ const NutritionTracker = () => {
     </div>
   );
 };
+
 
 export default NutritionTracker;

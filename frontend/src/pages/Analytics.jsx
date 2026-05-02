@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -31,20 +32,8 @@ ChartJS.register(
 // HELPERS
 // ─────────────────────────────────────────────
 
-const getUserId = () => {
-  const userData = localStorage.getItem('user');
-  if (userData) {
-    try {
-      const parsed = JSON.parse(userData);
-      return parsed.id;
-    } catch (e) {
-      console.error('Error parsing user from localStorage', e);
-    }
-  }
-  return 1;
-};
 
-const USER_ID = getUserId();
+
 
 const calculateSleepScore = (hours, quality) => {
   const durationScore =
@@ -556,6 +545,9 @@ function DistributionZones({ zones, zonesLoading }) {
 // ─────────────────────────────────────────────
 
 const Analytics = () => {
+  
+const { user } = useAuth();
+const USER_ID = user?.id;
   const [timeframe, setTimeframe]       = useState('Weekly');
   const [sleepHours, setSleepHours]     = useState(7);
   const [sleepQuality, setSleepQuality] = useState(7);

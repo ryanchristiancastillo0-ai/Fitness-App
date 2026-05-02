@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../config/port';
+import { useAuth } from '../hooks/useAuth';
 
 import {
   Sidebar,
@@ -16,33 +17,36 @@ import {
   FAB,
 } from '../components';
 
-const SOCKET_URL   = import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000';
 
-const socket = io(SOCKET_URL);
+const socket = io(SOCKET_URL, {
+  withCredentials: true,
+});
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user, loading, logout } = useAuth();
 
-  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const USER_ID    = storedUser?.id || storedUser?.user?.id || null;
+  const USER_ID = user?.id || null;
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
   useEffect(() => {
-    if (!USER_ID) navigate('/login');
-  }, [USER_ID, navigate]);
+    if (!loading && !user) {
+      navigate('/login');
+    }
+  }, [loading, user, navigate]);
 
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [data,             setData]             = useState({ stats: {}, profile: {} });
-  const [insights,          setInsights]         = useState([]);
-  const [biometrics,       setBiometrics]       = useState([]);
-  const [isAnalyzing,       setIsAnalyzing]      = useState(false);
+  const [data,            setData]            = useState({ stats: {}, profile: {} });
+  const [insights,        setInsights]        = useState([]);
+  const [biometrics,      setBiometrics]      = useState([]);
+  const [isAnalyzing,     setIsAnalyzing]     = useState(false);
 
-  const isAnalyzingRef         = useRef(false); 
+  const isAnalyzingRef = useRef(false);
 
   useEffect(() => {
     isAnalyzingRef.current = isAnalyzing;
@@ -54,10 +58,14 @@ const Dashboard = () => {
 
     const fetchDashboardData = async () => {
       try {
-        const response  = await fetch(`${API_BASE_URL}/api/dashboard/${USER_ID}`);
-        const result    = await response.json();
+        const response = await fetch(`${API_BASE_URL}/api/dashboard/${USER_ID}`, {
+          credentials: 'include',
+        });
+        const result = await response.json();
 
-        const sleepRes  = await fetch(`${API_BASE_URL}/api/sleep/${USER_ID}/today`);
+        const sleepRes  = await fetch(`${API_BASE_URL}/api/sleep/${USER_ID}/today`, {
+          credentials: 'include',
+        });
         const sleepData = await sleepRes.json();
 
         setData({
@@ -70,7 +78,9 @@ const Dashboard = () => {
           },
         });
 
-        const bioRes  = await fetch(`${API_BASE_URL}/api/sleep/${USER_ID}?range=D&metric=duration`);
+        const bioRes  = await fetch(`${API_BASE_URL}/api/sleep/${USER_ID}?range=D&metric=duration`, {
+          credentials: 'include',
+        });
         const bioData = await bioRes.json();
         if (Array.isArray(bioData) && bioData.length > 0) {
           setBiometrics(bioData);
@@ -101,11 +111,11 @@ const Dashboard = () => {
       setInsights(prev => [insight, ...prev].slice(0, 5));
     };
 
-    socket.on('new-biometric-data',    handleNewBiometric);
+    socket.on('new-biometric-data',   handleNewBiometric);
     socket.on('new-clinical-insight', handleNewInsight);
 
     return () => {
-      socket.off('new-biometric-data',    handleNewBiometric);
+      socket.off('new-biometric-data',   handleNewBiometric);
       socket.off('new-clinical-insight', handleNewInsight);
     };
   }, [USER_ID]);
@@ -121,8 +131,9 @@ const Dashboard = () => {
       const response = await fetch(`${API_BASE_URL}/api/ai/clinical-analysis`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          userId:     USER_ID,
+          userId: USER_ID,
           ...(currentBiometrics.length > 0 && { biometrics: currentBiometrics }),
           stats: {
             calories_burned:       currentStats?.calories_burned       || 0,
@@ -155,87 +166,109 @@ const Dashboard = () => {
 
   // --- 3. ACTIVITY LOGGER ---
   const handleLogActivity = async (formData) => {
-    try {
-      const hasActivity =
-        (parseInt(formData.calories) || 0) > 0 ||
-        (parseInt(formData.steps)    || 0) > 0 ||
-        (parseInt(formData.minutes)  || 0) > 0;
+  try {
+    // ---------------------------
+    // 1. EXTRACT ACTIVITY DATA ONLY
+    // ---------------------------
+    const calories = formData.calories ? parseInt(formData.calories) : 0;
+    const steps    = formData.steps    ? parseInt(formData.steps)    : 0;
+    const minutes  = formData.minutes  ? parseInt(formData.minutes)  : 0;
 
-      if (hasActivity) {
-        await fetch(`${API_BASE_URL}/api/logs/${USER_ID}`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            calories: parseInt(formData.calories) || 0,
-            steps:    parseInt(formData.steps)    || 0,
-            minutes:  parseInt(formData.minutes)  || 0,
-          }),
-        });
-      }
+    const hasActivity =
+      calories > 0 || steps > 0 || minutes > 0;
 
-      const hasWater = (parseInt(formData.water) || 0) > 0;
-      if (hasWater) {
-        await fetch(`${API_BASE_URL}/api/sleep/${USER_ID}`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            water_intake_ml: parseInt(formData.water) || 0,
-            sleep_duration:  0,
-            sleep_quality:   0,
-            recovery_score:  0,
-          }),
-        });
-      }
-
-      // ✅ ALWAYS FETCH LATEST DATA BEFORE AI ANALYSIS
-      const [updatedRes, sleepRes, bioRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/dashboard/${USER_ID}`),
-        fetch(`${API_BASE_URL}/api/sleep/${USER_ID}/today`),
-        fetch(`${API_BASE_URL}/api/sleep/${USER_ID}?range=D&metric=duration`)
-      ]);
-
-      const updatedData = await updatedRes.json();
-      const sleepData   = await sleepRes.json();
-      const freshBiometrics = await bioRes.json();
-
-      const newStats = {
-        ...updatedData.stats,
-        water_intake_ml: sleepData?.water_intake_ml || 0,
-        sleep_duration:  sleepData?.sleep_duration  || 0,
-        sleep_quality:   sleepData?.sleep_quality   || 0,
-      };
-
-      // Update Local State
-      setData(prev => ({
-        ...prev,
-        ...updatedData,
-        stats: newStats,
-      }));
-      
-      if (Array.isArray(freshBiometrics)) {
-        setBiometrics(freshBiometrics);
-      }
-
-      // ✅ PASS FRESH DATA DIRECTLY TO AI (Ensures AI never uses empty/old data)
-      generateClinicalInsight(Array.isArray(freshBiometrics) ? freshBiometrics : biometrics, newStats);
-
-    } catch (error) {
-      console.error('Error logging activity:', error);
+    // ---------------------------
+    // 2. SAVE ACTIVITY LOG
+    // ---------------------------
+    if (hasActivity) {
+      await fetch(`${API_BASE_URL}/api/logs/${USER_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          calories,
+          steps,
+          minutes,
+        }),
+      });
     }
-  };
 
+    // ---------------------------
+    // 3. REFRESH DASHBOARD + BIOMETRICS
+    // ---------------------------
+    const [updatedRes, bioRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/api/dashboard/${USER_ID}`, {
+        credentials: 'include',
+      }),
+      fetch(`${API_BASE_URL}/api/sleep/${USER_ID}?range=D&metric=duration`, {
+        credentials: 'include',
+      }),
+    ]);
+
+    const updatedData = await updatedRes.json();
+    const freshBiometrics = await bioRes.json();
+
+    // ---------------------------
+    // 4. FETCH LATEST SLEEP (SOURCE OF TRUTH)
+    // ---------------------------
+    const latestSleepRes = await fetch(
+      `${API_BASE_URL}/api/sleep/${USER_ID}/today`,
+      { credentials: 'include' }
+    );
+
+    const latestSleep = await latestSleepRes.json();
+
+    console.log('[DASHBOARD] Latest sleep:', latestSleep);
+
+    // ---------------------------
+    // 5. BUILD AI INPUT STATS
+    // ---------------------------
+    const newStats = {
+      ...updatedData.stats,
+      water_intake_ml: latestSleep?.water_intake_ml || 0,
+      sleep_duration:  latestSleep?.sleep_duration  || 0,
+      sleep_quality:   latestSleep?.sleep_quality   || 0,
+    };
+
+    // ---------------------------
+    // 6. UPDATE STATE
+    // ---------------------------
+    setData(prev => ({
+      ...prev,
+      ...updatedData,
+      stats: newStats,
+    }));
+
+    if (Array.isArray(freshBiometrics)) {
+      setBiometrics(freshBiometrics);
+    }
+
+    // ---------------------------
+    // 7. TRIGGER AI ANALYSIS
+    // ---------------------------
+    generateClinicalInsight(
+      Array.isArray(freshBiometrics) ? freshBiometrics : biometrics,
+      newStats
+    );
+
+  } catch (error) {
+    console.error('Error logging activity:', error);
+  }
+};
+
+  if (loading)  return null;
   if (!USER_ID) return null;
 
   return (
     <div className="min-h-screen bg-[#131313] text-[#e5e2e1] font-[Inter,sans-serif] overflow-x-hidden">
       <div className="hidden md:block">
-       <Sidebar 
-          onClick={handleLogout} 
-          expanded={sidebarExpanded} 
-          setExpanded={setSidebarExpanded} 
+        <Sidebar
+          onClick={handleLogout}
+          expanded={sidebarExpanded}
+          setExpanded={setSidebarExpanded}
         />
       </div>
-     <Topbar sidebarExpanded={sidebarExpanded} userId={USER_ID} />
+      <Topbar sidebarExpanded={sidebarExpanded} userId={USER_ID} />
 
       <main
         className={`pt-[80px] pb-24 md:pb-10 px-4 md:px-6 min-h-screen transition-all duration-400 ease-[cubic-bezier(0.4,0,0.2,1)]
@@ -247,9 +280,9 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-3 flex flex-col gap-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <CaloriesCard value={data.stats?.calories_burned || 0} />
+                <CaloriesCard value={data.stats?.calories_burned       || 0} />
                 <LoadCard     minutes={data.stats?.workout_duration_mins || 0} />
-                <ActivityCard steps={data.stats?.steps || 0} />
+                <ActivityCard steps={data.stats?.steps                 || 0} />
               </div>
 
               <div className="w-full relative">
@@ -267,6 +300,8 @@ const Dashboard = () => {
               <ClinicalAssistant
                 insights={insights}
                 water={data.stats?.water_intake_ml || 0}
+                sleep={data.stats?.sleep_duration  || 0}
+                quality={data.stats?.sleep_quality || 0}
                 isAnalyzing={isAnalyzing}
                 userId={USER_ID}
               />

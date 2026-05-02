@@ -1,15 +1,8 @@
+
 import React, { useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import Icon from './Icon';
-
-const NAV_ITEMS = [
-  { icon: 'dashboard',        label: 'Overview',      path: '/dashboard' },
-  { icon: 'monitor_heart',    label: 'Biometrics',    path: '/dashboard/analytics' },
-  { icon: 'analytics',        label: 'Analysis',      path: '/' },
-  { icon: 'book',             label: 'Plans',         path: '/dashboard/Plans' },
-  { icon: 'medical_services', label: 'Concierge',     path: '/' },
-];
-
+import { NAV_ITEMS } from '../constant/nav';
 const BOTTOM_ITEMS = [
   { icon: 'help_outline', label: 'Support' },
   { icon: 'logout',       label: 'Logout'  },

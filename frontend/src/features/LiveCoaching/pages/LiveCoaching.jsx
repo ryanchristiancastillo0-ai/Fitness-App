@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { Sidebar, Topbar } from '../../../components';
-import { handleLogout } from '../../../utils/logout';
+import { handleLogout } from '../../../hooks/logout';
 
 
 const FEEDBACKS = [

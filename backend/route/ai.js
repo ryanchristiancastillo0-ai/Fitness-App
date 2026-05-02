@@ -55,7 +55,7 @@ router.post('/ai/clinical-analysis', async (req, res) => {
     const { userId, stats } = req.body;
 
     try {
-        // 1. Fetch User Profile (name + fitness goal for personalization)
+        // 1. Fetch User Profile
         const [userRows] = await db.execute(
             'SELECT name, fitness_goal FROM users WHERE id = ? LIMIT 1',
             [userId]
@@ -63,20 +63,39 @@ router.post('/ai/clinical-analysis', async (req, res) => {
         const user = userRows[0] || { name: 'Athlete', fitness_goal: 'general fitness' };
         const firstName = user.name ? user.name.split(' ')[0] : 'Athlete';
 
-        // 2. Fetch Sleep Data
+        // 2. Fetch Latest Sleep Data
         const [sleepRows] = await db.execute(
-            'SELECT sleep_duration, sleep_quality, water_intake_ml FROM sleep_logs WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 1',
+            `SELECT sleep_duration, sleep_quality, recovery_score, water_intake_ml, recorded_at
+             FROM sleep_logs 
+             WHERE user_id = ? 
+               AND (sleep_duration > 0 OR sleep_quality > 0 OR water_intake_ml > 0)
+             ORDER BY recorded_at DESC LIMIT 1`,
             [userId]
         );
-        const sleep = sleepRows[0] || { sleep_duration: 0, sleep_quality: 0, water_intake_ml: 0 };
 
-        // 3. Fallback Logic: Use fresh stats from frontend, else hit DB
+        console.log(`[VITALIS AI] ── SLEEP DB QUERY RESULT for user ${userId} ──`);
+        console.log(`  Rows returned: ${sleepRows.length}`);
+        console.log(`  Latest row   :`, sleepRows[0] || '⚠️ NO ROW FOUND IN DB');
+
+        // 3. Build sleep object — prefer fresh stats from frontend, fallback to DB
+        const dbSleep = sleepRows[0] || {};
+
+        console.log(`[VITALIS AI] Stats from frontend:`, stats);
+
+        const sleep = {
+            sleep_duration:  (stats?.sleep_duration  > 0) ? stats.sleep_duration  : (dbSleep.sleep_duration  || 0),
+            sleep_quality:   (stats?.sleep_quality   > 0) ? stats.sleep_quality   : (dbSleep.sleep_quality   || 0),
+            water_intake_ml: (stats?.water_intake_ml > 0) ? stats.water_intake_ml : (dbSleep.water_intake_ml || 0),
+        };
+
+        // 4. Build activity object
         const activity = {
             calories_burned:       stats?.calories_burned       ?? 0,
             steps:                 stats?.steps                 ?? 0,
             workout_duration_mins: stats?.workout_duration_mins ?? 0,
         };
 
+        // If no stats passed in at all, hit the activity DB
         if (!stats || Object.keys(stats).length === 0) {
             const [activityRows] = await db.execute(
                 'SELECT calories_burned, steps, workout_duration_mins FROM daily_stats WHERE user_id = ? ORDER BY stat_date DESC LIMIT 1',
@@ -89,17 +108,48 @@ router.post('/ai/clinical-analysis', async (req, res) => {
             }
         }
 
-        // 4. Generate Signature (include firstName so cache is user-specific)
-        const signature = `s${sleep.sleep_duration}-q${sleep.sleep_quality}-w${sleep.water_intake_ml}-c${activity.calories_burned}-st${activity.steps}-m${activity.workout_duration_mins}-u${userId}`;
+        // ── DEBUG LOGS ──
+        console.log(`[VITALIS AI] ── FINAL SLEEP OBJECT ──`);
+        console.log(`  sleep_duration : ${sleep.sleep_duration}  ${sleep.sleep_duration === 0 ? '⚠️ ZERO' : '✅'}`);
+        console.log(`  sleep_quality  : ${sleep.sleep_quality}   ${sleep.sleep_quality  === 0 ? '⚠️ ZERO' : '✅'}`);
+        console.log(`  water_intake_ml: ${sleep.water_intake_ml} ${sleep.water_intake_ml === 0 ? '⚠️ ZERO' : '✅'}`);
 
-        // 5. Check Cache
+        console.log(`[VITALIS AI] ── FINAL ACTIVITY OBJECT ──`);
+        console.log(`  calories_burned      : ${activity.calories_burned}       ${activity.calories_burned       === 0 ? '⚠️ ZERO' : '✅'}`);
+        console.log(`  steps                : ${activity.steps}                 ${activity.steps                 === 0 ? '⚠️ ZERO' : '✅'}`);
+        console.log(`  workout_duration_mins: ${activity.workout_duration_mins} ${activity.workout_duration_mins === 0 ? '⚠️ ZERO' : '✅'}`);
+
+        // 5. Guard: If sleep data is still all zeros after DB fallback, return early
+        if (sleep.sleep_duration === 0 && sleep.sleep_quality === 0 && sleep.water_intake_ml === 0) {
+            console.log(`[VITALIS AI] ⚠️ All sleep values are zero — returning early for user ${userId}`);
+            return res.status(200).json({
+                insights: [
+                    {
+                        id: `sleep-${Date.now()}`,
+                        message: `${firstName}, we don't have enough sleep data to generate an accurate analysis yet. Please log your sleep and water intake to unlock personalized insights.`,
+                        category: 'Rest Advisory',
+                        trend: 'stable'
+                    }
+                ],
+                fromCache: false,
+                warning: 'No valid sleep data found for this user.'
+            });
+        }
+
+        // 6. Cache Signature — includes today's date to bust stale cache daily
+        const today = new Date().toISOString().slice(0, 10); // e.g. "2025-05-02"
+        const signature = `s${sleep.sleep_duration}-q${sleep.sleep_quality}-w${sleep.water_intake_ml}-c${activity.calories_burned}-st${activity.steps}-m${activity.workout_duration_mins}-u${userId}-d${today}`;
+
+        console.log(`[VITALIS AI] Cache signature: ${signature}`);
+
+        // 7. Check Cache
         const [cached] = await db.execute(
             'SELECT sleep_suggestion, activity_suggestion FROM ai_insight_cache WHERE user_id = ? AND data_signature = ? LIMIT 1',
             [userId, signature]
         );
 
         if (cached.length > 0) {
-            console.log(`[VITALIS AI] Cache HIT for user ${userId}`);
+            console.log(`[VITALIS AI] ✅ Cache HIT for user ${userId}`);
             return res.json({
                 insights: [
                     { id: `sleep-${Date.now()}`,    ...JSON.parse(cached[0].sleep_suggestion) },
@@ -111,17 +161,17 @@ router.post('/ai/clinical-analysis', async (req, res) => {
 
         console.log(`[VITALIS AI] Cache MISS for user ${userId} — calling Gemini`);
 
-        // 6. Derive contextual flags for richer prompting
-        const waterGlass        = Math.round(sleep.water_intake_ml / 250);  // ~250ml per glass
-        const sleepStatus       = sleep.sleep_duration >= 7 ? 'adequate' : sleep.sleep_duration >= 5 ? 'below optimal' : 'critically low';
-        const qualityStatus     = sleep.sleep_quality  >= 7 ? 'excellent' : sleep.sleep_quality  >= 5 ? 'fair' : 'poor';
-        const stepGoalPercent   = Math.round((activity.steps / 10000) * 100);
-        const calorieStatus     = activity.calories_burned >= 500 ? 'strong' : activity.calories_burned >= 200 ? 'moderate' : 'low';
-        const workoutStatus     = activity.workout_duration_mins >= 45 ? 'solid session' : activity.workout_duration_mins >= 20 ? 'light session' : 'minimal activity';
-        const hydrationStatus   = sleep.water_intake_ml >= 2500 ? 'well-hydrated' : sleep.water_intake_ml >= 1500 ? 'approaching goal' : 'under-hydrated';
-        const todayDate         = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        // 8. Contextual flags
+        const waterGlass      = Math.round(sleep.water_intake_ml / 250);
+        const sleepStatus     = sleep.sleep_duration >= 7 ? 'adequate' : sleep.sleep_duration >= 5 ? 'below optimal' : 'critically low';
+        const qualityStatus   = sleep.sleep_quality  >= 7 ? 'excellent' : sleep.sleep_quality  >= 5 ? 'fair' : 'poor';
+        const stepGoalPercent = Math.round((activity.steps / 10000) * 100);
+        const calorieStatus   = activity.calories_burned >= 500 ? 'strong' : activity.calories_burned >= 200 ? 'moderate' : 'low';
+        const workoutStatus   = activity.workout_duration_mins >= 45 ? 'solid session' : activity.workout_duration_mins >= 20 ? 'light session' : 'minimal activity';
+        const hydrationStatus = sleep.water_intake_ml >= 2500 ? 'well-hydrated' : sleep.water_intake_ml >= 1500 ? 'approaching goal' : 'under-hydrated';
+        const todayDate       = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-        // 7. Prompt Construction — detailed, personalized, clinical tone
+        // 9. Prompt
         const prompt = `
 You are Vitalis AI, a professional health intelligence assistant embedded in a fitness dashboard.
 Your job is to give ${firstName} a personalized, specific, and motivating clinical insight — not generic advice.
@@ -175,7 +225,7 @@ RESPONSE FORMAT (strict JSON only, no markdown, no extra text):
         const cleaned  = raw.replace(/```json|```/gi, '').trim();
         const aiResult = JSON.parse(cleaned);
 
-        // 8. Update Cache
+        // 10. Update Cache
         if (aiResult?.sleep_suggestion && aiResult?.activity_suggestion) {
             await db.execute(
                 `INSERT INTO ai_insight_cache (user_id, data_signature, sleep_suggestion, activity_suggestion)
@@ -201,6 +251,7 @@ RESPONSE FORMAT (strict JSON only, no markdown, no extra text):
         res.status(500).json({ error: "AI calculation failed" });
     }
 });
+
 // --- AI WORKOUT COACH ---
 router.post('/ai/coach', async (req, res) => {
     const { landmarks, workoutType } = req.body;
@@ -246,41 +297,46 @@ router.get('/ai/history/:userId', async (req, res) => {
     }
 });
 
-
-// GET latest activity logs for a specific user
+// --- GET LATEST ACTIVITY LOGS ---
 router.get('/logs/latest/:userId', async (req, res) => {
     const { userId } = req.params;
-
     try {
-        // Query to get the most recent log entry for this user
-        // Adjust 'logs' to your actual table name
         const [latestLog] = await db.execute(
-            'SELECT * FROM logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+            `SELECT calories_burned, steps, workout_duration_mins 
+             FROM daily_stats 
+             WHERE user_id = ? 
+             ORDER BY stat_date DESC LIMIT 1`,
             [userId]
         );
 
-        // Query to get the most recent water/sleep entry
         const [latestSleep] = await db.execute(
-            'SELECT * FROM sleep_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+            `SELECT * FROM sleep_logs 
+             WHERE user_id = ? 
+               AND (sleep_duration > 0 OR sleep_quality > 0 OR water_intake_ml > 0)
+             ORDER BY recorded_at DESC LIMIT 1`,
             [userId]
         );
 
-        if (!latestLog && !latestSleep) {
+        // ── DEBUG LOGS ──
+        console.log(`[LATEST LOGS] ── DB RESULTS for user ${userId} ──`);
+        console.log(`  latestLog  :`, latestLog[0]  || '⚠️ NO ROW RETURNED');
+        console.log(`  latestSleep:`, latestSleep[0] || '⚠️ NO ROW RETURNED');
+
+        if (!latestLog.length && !latestSleep.length) {
             return res.status(404).json({ message: "No historical data found for this user." });
         }
 
         res.json({
             stats: {
-                calories_burned: latestLog?.calories || 0,
-                steps: latestLog?.steps || 0,
-                workout_duration_mins: latestLog?.minutes || 0,
-                water_intake_ml: latestSleep?.water_intake_ml || 0,
-                sleep_duration: latestSleep?.sleep_duration || 0,
-                sleep_quality: latestSleep?.sleep_quality || 0,
+                calories_burned:       latestLog[0]?.calories_burned       || 0,
+                steps:                 latestLog[0]?.steps                 || 0,
+                workout_duration_mins: latestLog[0]?.workout_duration_mins || 0,
+                water_intake_ml:       latestSleep[0]?.water_intake_ml     || 0,
+                sleep_duration:        latestSleep[0]?.sleep_duration      || 0,
+                sleep_quality:         latestSleep[0]?.sleep_quality       || 0,
             },
-            last_updated: latestLog?.created_at || latestSleep?.created_at
+            last_updated: latestLog[0]?.stat_date || latestSleep[0]?.recorded_at
         });
-
     } catch (error) {
         console.error("Error fetching latest logs:", error);
         res.status(500).json({ error: "Internal Server Error" });

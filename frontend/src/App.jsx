@@ -15,19 +15,28 @@ import Records from "./pages/Record";
 
 // Middleware
 import { ProtectedRoute, PublicRoute } from "./hooks/useMiddleware";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
 import NutritionTracker from "./features/MealTracker/pages/MealTreacker";
-import LiveCoaching from "./features/LiveCoaching/pages/LiveCoaching";
+
+import BMI from "./pages/BMI";
+
+import VirtualClinic from "./features/Coach/pages/virtual-clinic";
+import ActivityMap from "./pages/ActivityMap";
 
 export default function App() {
   return (
     <div className="container">
-      <RoutesHandler />
+      <AuthProvider>
+        <RoutesHandler />
+      </AuthProvider>
     </div>
   );
 }
 
 function RoutesHandler() {
-  const token = localStorage.getItem("token");
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
 
   return (
     <Routes>
@@ -35,7 +44,7 @@ function RoutesHandler() {
       <Route
         path="/"
         element={
-          token ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+          user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
         }
       />
 
@@ -83,6 +92,15 @@ function RoutesHandler() {
         element={
           <ProtectedRoute>
             <Plans />
+          </ProtectedRoute>
+        }
+      />
+
+     <Route
+        path="/dashboard/activity-map"
+        element={
+          <ProtectedRoute>
+            <ActivityMap/>
           </ProtectedRoute>
         }
       />
@@ -163,10 +181,21 @@ function RoutesHandler() {
         path="/dashboard/live-coaching"
         element={
           <ProtectedRoute>
-          <LiveCoaching/>
+        <VirtualClinic/>
           </ProtectedRoute>
         }
       />
+
+      <Route
+        path="/dashboard/bmi"
+        element={
+          <ProtectedRoute>
+         <BMI/>
+          </ProtectedRoute>
+        }
+      />
+
+      
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />

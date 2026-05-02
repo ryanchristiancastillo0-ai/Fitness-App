@@ -120,7 +120,7 @@ const ClinicalAssistant = ({ insights = [], water = 0, isAnalyzing = false, user
   const activeInsights = showHistory ? history : (insights.length > 0 ? insights : history.slice(0, 5));
 
   return (
-    <div className="h-full min-h-[500px] lg:h-[calc(100vh-120px)] bg-[#2a2a2a] border border-white/[0.05] rounded-[14px] p-[22px] flex flex-col overflow-hidden">
+    <div className="h-full min-h-[600px] lg:h-[calc(100vh-120px)] bg-[#2a2a2a] border border-white/[0.05] rounded-[14px] p-[22px] flex flex-col overflow-hidden">
       <div className="flex items-center justify-between mb-5 flex-shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-[#45483e] flex items-center justify-center">

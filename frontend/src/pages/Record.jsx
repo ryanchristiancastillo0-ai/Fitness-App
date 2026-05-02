@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sidebar, Topbar, MobileNav } from '../components';
 import { API_BASE_URL } from '../config/port';
+import { useAuth } from '../hooks/useAuth';
 
 // ─── BMI Category Config ────────────────────────────────────────────────────
 const BMI_CATEGORIES = [
@@ -76,15 +77,16 @@ const BmiGaugeBar = ({ bmi }) => {
 
 // ────────────────────────────────────────────────────────────────────────────
 const Records = () => {
-  const navigate  = useNavigate();
-  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const USER_ID    = storedUser?.id || storedUser?.user?.id || null;
+  const navigate = useNavigate();
+  const { user, loading, logout } = useAuth();
+  const USER_ID = user?.id || null;
 
-  useEffect(() => { if (!USER_ID) navigate('/login'); }, [USER_ID, navigate]);
+  useEffect(() => {
+    if (!loading && !USER_ID) navigate('/login');
+  }, [USER_ID, loading, navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -115,7 +117,9 @@ const Records = () => {
   const fetchActivity = useCallback(async (limit) => {
     setActivityLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/logs/history/${USER_ID}?limit=${limit}&offset=0`);
+      const res  = await fetch(`${API_BASE_URL}/api/logs/history/${USER_ID}?limit=${limit}&offset=0`, {
+        credentials: 'include',
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         setActivityLogs(data);
@@ -132,7 +136,9 @@ const Records = () => {
   const fetchSleep = useCallback(async (limit) => {
     setSleepLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/sleep/${USER_ID}?range=M&metric=duration&limit=${limit}`);
+      const res  = await fetch(`${API_BASE_URL}/api/sleep/${USER_ID}?range=M&metric=duration&limit=${limit}`, {
+        credentials: 'include',
+      });
       const data = await res.json();
       if (Array.isArray(data)) {
         setSleepLogs(data);
@@ -146,7 +152,9 @@ const Records = () => {
   const fetchBmi = useCallback(async (limit) => {
     setBmiLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/bmi/${USER_ID}?limit=${limit}&offset=0`);
+      const res  = await fetch(`${API_BASE_URL}/api/bmi/${USER_ID}?limit=${limit}&offset=0`, {
+        credentials: 'include',
+      });
       const data = await res.json();
       setBmiRecords(data.records || []);
       setBmiTotal(data.total     || 0);
@@ -188,6 +196,7 @@ const Records = () => {
     try {
       const res  = await fetch(`${API_BASE_URL}/api/bmi/${USER_ID}`, {
         method:  'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           weight_kg: parseFloat(bmiForm.weight_kg),

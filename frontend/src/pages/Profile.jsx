@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Icon, Sidebar } from '../components';
 import { API_BASE_URL } from '../config/port';
+import { useAuth } from '../hooks/useAuth';
 
 const Profile = () => {
   const [expanded, setExpanded] = useState(false);
@@ -8,9 +9,8 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false); // New: Modal State
 
-  // ✅ DYNAMIC USER DETECTION
-  const storedUser = JSON.parse(localStorage.getItem('user'));
-  const USER_ID = storedUser?.id || storedUser?.user?.id;
+  const { user, loading, setUser } = useAuth();
+  const USER_ID = user?.id || null;
 
   // 1. Form State (Physician Removed)
   const [formData, setFormData] = useState({
@@ -31,25 +31,23 @@ const Profile = () => {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const savedUser = localStorage.getItem('user');
-      if (!savedUser) {
-        setIsLoading(false);
+      if (!user) {
+        if (!loading) setIsLoading(false);
         return;
       }
 
-      const userData = JSON.parse(savedUser);
-      const userId = userData.id;
-
       try {
-        const response = await fetch(`${API_BASE_URL}/api/profile/${userId}`);
+        const response = await fetch(`${API_BASE_URL}/api/profile/${USER_ID}`, {
+          credentials: 'include',
+        });
         
         if (response.ok) {
           const dbData = await response.json();
           const mappedData = {
-            fullName: dbData.fullName || userData.name || '',
-            email:    dbData.email || userData.email || '',
+            fullName: dbData.fullName || user.name || '',
+            email:    dbData.email || user.email || '',
             contact:  dbData.contact || '', 
-            bio:      dbData.bio || userData.fitness_goal || ''
+            bio:      dbData.bio || user.fitness_goal || ''
           };
           setFormData(mappedData);
           setSavedData(mappedData);
@@ -61,7 +59,7 @@ const Profile = () => {
       }
     };
     fetchProfile();
-  }, []);
+  }, [USER_ID, user, loading]);
 
   // Handlers
   const handleInputChange = (e, field) => {
@@ -101,9 +99,11 @@ const Profile = () => {
         setSavedData({ ...formData });
         setIsEditing(false);
         
-        // Sync Local Storage
-        const updatedStorage = { ...storedUser, name: formData.fullName };
-        localStorage.setItem('user', JSON.stringify(updatedStorage));
+        // Sync authenticated user state
+        setUser((prev) => ({
+          ...prev,
+          name: formData.fullName,
+        }));
         
         // Trigger Theme-Aligned Modal
         setShowModal(true);

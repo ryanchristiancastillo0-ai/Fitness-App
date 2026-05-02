@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import { API_BASE_URL } from '../config/port';
+import { useAuth } from '../hooks/useAuth';
 
 const Login = () => {
   const [email,    setEmail]    = useState('');
@@ -10,6 +11,7 @@ const Login = () => {
   const [loading,  setLoading]  = useState(false);
   const [focused,  setFocused]  = useState('');
   const navigate = useNavigate();
+  const { setUser } = useAuth();
 
 const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,6 +20,7 @@ const handleSubmit = async (e) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method:  'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body:     JSON.stringify({ email, password }),
       });
@@ -29,11 +32,7 @@ const handleSubmit = async (e) => {
       const userId = data?.id || data?.user?.id;
       if (!userId) throw new Error('Login response did not include a user ID.');
 
-      // ✅ FIX: Store the WHOLE data object so the Dashboard can see the user's name, goal, etc.
-      // Your dashboard likely calls JSON.parse(localStorage.getItem('user'))
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data)); 
-
+      setUser(data);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message);
@@ -48,8 +47,9 @@ const handleSubmit = async (e) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/google-login`, {
         method:  'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: codeResponse.code })
+        body: JSON.stringify({ code: codeResponse.code })
       });
 
       const contentType = response.headers.get("content-type");
@@ -64,7 +64,7 @@ const handleSubmit = async (e) => {
       const userId = data?.id || data?.user?.id;
       if (!userId) throw new Error('Google login response did not include a user ID.');
 
-      localStorage.setItem('user', JSON.stringify(data));
+      setUser(data);
       navigate('/dashboard');
     } catch (err) {
       console.error("Google Login Error:", err);

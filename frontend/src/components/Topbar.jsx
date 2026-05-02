@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import { API_BASE_URL } from '../config/port';
+import { useAuth } from '../hooks/useAuth';
 
 // Restored missing constant
 const NAV_LINKS = [
   { name: 'Overview', path: '/' },
-  { name: 'Meal Tracker', path: '/dashboard/meal-tracker' },
+  { name: 'Meal Tracker', path: '/dashboard/meal-tracker'  },
   { name: 'Live Coaching', path: '/dashboard/live-coaching' },
 ];
 
@@ -43,12 +44,16 @@ const Topbar = ({ sidebarExpanded, userId }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const { logout } = useAuth();
+
   // Fetch profile & notifications
   useEffect(() => {
     if (!userId) return;
     const fetchTopbarData = async () => {
       try {
-        const res = await fetch(API_BASE_URL + '/api/dashboard/' + userId);
+        const res = await fetch(API_BASE_URL + '/api/dashboard/' + userId, {
+          credentials: 'include',
+        });
         const data = await res.json();
         if (data.profile) {
           setUserData({
@@ -56,7 +61,9 @@ const Topbar = ({ sidebarExpanded, userId }) => {
             avatar_url: data.profile.avatar_url || '',
           });
         }
-        const notifRes = await fetch(API_BASE_URL + '/api/notifications/' + userId);
+        const notifRes = await fetch(API_BASE_URL + '/api/notifications/' + userId, {
+          credentials: 'include',
+        });
         const notifData = await notifRes.json();
         setNotifCount(notifData.count || 0);
       } catch (err) {
@@ -71,7 +78,9 @@ const Topbar = ({ sidebarExpanded, userId }) => {
     const timer = setTimeout(async () => {
       if (searchQuery.length > 2) {
         try {
-          const res = await fetch(API_BASE_URL + '/api/search?q=' + searchQuery);
+          const res = await fetch(API_BASE_URL + '/api/search?q=' + searchQuery, {
+            credentials: 'include',
+          });
           const results = await res.json();
           setSearchResults(Array.isArray(results) ? results : []);
         } catch (err) {
@@ -84,10 +93,8 @@ const Topbar = ({ sidebarExpanded, userId }) => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
-    localStorage.removeItem('activeNavPath');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
