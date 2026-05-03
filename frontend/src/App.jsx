@@ -2,12 +2,12 @@ import { Route, Routes, Navigate } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
+import Dashboard from "./features/Dashboard/pages/Dashboard";
 import ClinicalMessenger from "./pages/Social";
-import Plans from "./pages/Plans";
-import Analytics from "./pages/Analytics";
+import Plans from "./features/Plan/pages/Plans";
+import Analytics from "./features/Analytics/pages/Analytics";
 import Offline from "./pages/Offline";
-import CameraWorkout from "./pages/CameraWorkout";
+import CameraWorkout from "./features/CameraWorkout/pages/CameraWorkout";
 import Jogging from "./pages/Jogging";
 import Profile from "./pages/Profile";
 import Log from "./pages/Log";
@@ -25,7 +25,7 @@ import ActivityMap from "./pages/ActivityMap";
 
 export default function App() {
   return (
-    <div className="container">
+    <div className="w-full min-h-screen">
       <AuthProvider>
         <RoutesHandler />
       </AuthProvider>

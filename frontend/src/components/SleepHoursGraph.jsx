@@ -161,7 +161,7 @@ export const SleepHoursGraph = ({ userId = null }) => {
   })();
 
   return (
-    <div className="bg-[#1a1a18] border border-white/[0.06] rounded-[16px] p-6 pb-4 transition-all duration-300">
+    <div className="bg-[#1a1a18] border min-h-[410px] border-white/[0.06] rounded-[16px] p-6 pb-4 transition-all duration-300">
 
       {/* ── Header ── */}
       <div className="flex flex-wrap justify-between items-start gap-3 mb-5">

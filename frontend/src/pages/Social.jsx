@@ -4,7 +4,13 @@ import { MobileNav, Sidebar, Topbar } from '../components';
 import { API_BASE_URL } from '../config/port';
 import { useAuth } from '../hooks/useAuth';
 
+// Make sure VITE_SOCKET_URL is set in your .env:
+//   VITE_SOCKET_URL=http://localhost:8000
+// And API_BASE_URL in config/port.js should be:
+//   export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000';
+
+// Create socket ONCE outside the component so it doesn't reconnect on re-renders
 const socket = io(SOCKET_URL, { withCredentials: true });
 
 const Icon = ({ name, className = '', fill = 0, weight = 300 }) => (
@@ -99,9 +105,16 @@ const ClinicalMessenger = () => {
     };
     fetchMessages();
 
+    // ── Real-time socket listener for this conversation ──────────────────
     const handleNewMessage = (newMsg) => {
-      if (newMsg.sender_id === activeContact.id || newMsg.receiver_id === activeContact.id) {
-        setMessages(prev => [...prev, { ...newMsg, isMe: newMsg.sender_id === userId ? 1 : 0 }]);
+      if (
+        newMsg.sender_id === activeContact.id ||
+        newMsg.receiver_id === activeContact.id
+      ) {
+        setMessages(prev => [
+          ...prev,
+          { ...newMsg, isMe: newMsg.sender_id === userId ? 1 : 0 },
+        ]);
       }
     };
     socket.on('receive-chat', handleNewMessage);
@@ -135,7 +148,7 @@ const ClinicalMessenger = () => {
     const content = inputValue.trim();
     setInputValue('');
 
-    // Show message immediately (optimistic)
+    // Optimistic UI: show message immediately before server confirms
     const optimistic = {
       content,
       time:  new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -154,6 +167,7 @@ const ClinicalMessenger = () => {
           credentials: 'include',
           body:        JSON.stringify({ message: content, userId }),
         });
+        if (!res.ok) throw new Error(`AI API error: ${res.status}`);
         const data = await res.json();
         setMessages(prev => [...prev, {
           content: data.reply || 'System Error: Unable to reach AI pipeline.',
@@ -162,6 +176,11 @@ const ClinicalMessenger = () => {
         }]);
       } catch (err) {
         console.error('AI chat error:', err);
+        setMessages(prev => [...prev, {
+          content: 'System Error: Unable to reach AI pipeline.',
+          time:    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isMe:    0,
+        }]);
       } finally {
         setIsAiTyping(false);
       }
@@ -179,15 +198,20 @@ const ClinicalMessenger = () => {
       if (!res.ok) throw new Error(`Save failed: ${res.status}`);
       const saved = await res.json();
 
-      // Replace optimistic with DB-confirmed message
+      // Replace optimistic with DB-confirmed message (has real id + timestamp)
       setMessages(prev =>
         prev.map(m => (m._temp && m.content === content) ? { ...saved, isMe: 1 } : m)
       );
 
       // Broadcast to receiver's socket room
-      socket.emit('send-chat', { ...saved, sender_id: userId, receiver_id: activeContact.id });
+      socket.emit('send-chat', {
+        ...saved,
+        sender_id:   userId,
+        receiver_id: activeContact.id,
+      });
     } catch (err) {
       console.error('Send message error:', err);
+      // Mark the optimistic message as failed
       setMessages(prev =>
         prev.map(m => (m._temp && m.content === content) ? { ...m, failed: true } : m)
       );
@@ -249,9 +273,16 @@ const ClinicalMessenger = () => {
                   Global Results
                 </p>
                 {searchResults.map(u => (
-                  <div key={u.id} className="px-6 py-3 flex items-center justify-between hover:bg-white/5 transition-all">
+                  <div
+                    key={u.id}
+                    className="px-6 py-3 flex items-center justify-between hover:bg-white/5 transition-all"
+                  >
                     <div className="flex items-center gap-3">
-                      <img className="w-8 h-8 rounded-full border border-white/10" src={u.avatar_url} alt="" />
+                      <img
+                        className="w-8 h-8 rounded-full border border-white/10"
+                        src={u.avatar_url}
+                        alt={u.name}
+                      />
                       <span className="text-sm font-medium">{u.name}</span>
                     </div>
                     <button
@@ -269,7 +300,7 @@ const ClinicalMessenger = () => {
               Your Friends
             </p>
 
-            {/* AI contact (always pinned) */}
+            {/* AI contact — always pinned at top */}
             <div
               onClick={() => setActiveContact(AI_CONTACT)}
               className={`p-4 flex gap-4 cursor-pointer hover:bg-white/5 transition-colors ${
@@ -277,34 +308,54 @@ const ClinicalMessenger = () => {
               }`}
             >
               <div className="relative">
-                <img className="w-12 h-12 rounded-full border border-white/10" src={AI_CONTACT.avatar_url} alt="" />
+                <img
+                  className="w-12 h-12 rounded-full border border-white/10"
+                  src={AI_CONTACT.avatar_url}
+                  alt="Vitalis AI"
+                />
                 <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0e0e0e] bg-[#c7f248]" />
               </div>
               <div className="flex-grow min-w-0">
                 <h3 className="text-sm font-bold truncate">{AI_CONTACT.name}</h3>
-                <p className="text-[10px] text-[#c7f248] uppercase tracking-widest font-bold">System Intelligence</p>
+                <p className="text-[10px] text-[#c7f248] uppercase tracking-widest font-bold">
+                  System Intelligence
+                </p>
               </div>
             </div>
 
             {/* Human contacts from DB */}
             {contacts.length === 0 ? (
-              <p className="px-6 text-xs text-neutral-600 italic">No friends added yet. Use search above!</p>
+              <p className="px-6 text-xs text-neutral-600 italic">
+                No friends added yet. Use search above!
+              </p>
             ) : (
               contacts.map(contact => (
                 <div
                   key={contact.id}
                   onClick={() => setActiveContact(contact)}
                   className={`p-4 flex gap-4 cursor-pointer hover:bg-white/5 transition-colors ${
-                    activeContact?.id === contact.id ? 'bg-white/5 border-l-2 border-[#c7f248]' : ''
+                    activeContact?.id === contact.id
+                      ? 'bg-white/5 border-l-2 border-[#c7f248]'
+                      : ''
                   }`}
                 >
                   <div className="relative">
-                    <img className="w-12 h-12 rounded-full border border-white/10" src={contact.avatar_url} alt="" />
-                    <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0e0e0e] ${contact.is_online ? 'bg-[#c7f248]' : 'bg-neutral-600'}`} />
+                    <img
+                      className="w-12 h-12 rounded-full border border-white/10"
+                      src={contact.avatar_url}
+                      alt={contact.name}
+                    />
+                    <div
+                      className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0e0e0e] ${
+                        contact.is_online ? 'bg-[#c7f248]' : 'bg-neutral-600'
+                      }`}
+                    />
                   </div>
                   <div className="flex-grow min-w-0">
                     <h3 className="text-sm font-bold truncate">{contact.name}</h3>
-                    <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-bold">Clinical Advisor</p>
+                    <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-bold">
+                      Clinical Advisor
+                    </p>
                   </div>
                 </div>
               ))
@@ -317,17 +368,31 @@ const ClinicalMessenger = () => {
           {activeContact ? (
             <>
               <header className="h-20 px-8 flex items-center border-b border-white/5 gap-4">
-                <img className="w-10 h-10 rounded-full" src={activeContact.avatar_url} alt="" />
+                <img
+                  className="w-10 h-10 rounded-full"
+                  src={activeContact.avatar_url}
+                  alt={activeContact.name}
+                />
                 <div>
                   <h1 className="text-lg font-bold">{activeContact.name}</h1>
                   <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeContact.is_online ? 'bg-[#c7f248] animate-pulse' : 'bg-neutral-600'}`} />
-                    <span className="text-[10px] text-[#c7f248] uppercase tracking-widest font-medium">Active Session</span>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        activeContact.is_online ? 'bg-[#c7f248] animate-pulse' : 'bg-neutral-600'
+                      }`}
+                    />
+                    <span className="text-[10px] text-[#c7f248] uppercase tracking-widest font-medium">
+                      Active Session
+                    </span>
                   </div>
                 </div>
               </header>
 
-              <div ref={scrollRef} className="flex-grow overflow-y-auto p-8 flex flex-col gap-6 no-scrollbar">
+              {/* Messages */}
+              <div
+                ref={scrollRef}
+                className="flex-grow overflow-y-auto p-8 flex flex-col gap-6 no-scrollbar"
+              >
                 {loadingMsgs ? (
                   <div className="flex-grow flex items-center justify-center text-neutral-600 text-xs">
                     Loading messages…
@@ -336,32 +401,51 @@ const ClinicalMessenger = () => {
                   messages.map((msg, idx) => (
                     <div
                       key={msg.id || idx}
-                      className={`flex flex-col gap-2 max-w-[75%] ${msg.isMe ? 'self-end items-end' : 'self-start items-start'}`}
+                      className={`flex flex-col gap-2 max-w-[75%] ${
+                        msg.isMe ? 'self-end items-end' : 'self-start items-start'
+                      }`}
                     >
-                      <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                        msg.isMe
-                          ? `bg-[#c7f248]/10 border border-[#c7f248]/20 text-[#c7f248] rounded-br-none${msg.failed ? ' opacity-50' : ''}`
-                          : 'bg-[#2a2a2a] text-white rounded-bl-none'
-                      }`}>
+                      <div
+                        className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                          msg.isMe
+                            ? `bg-[#c7f248]/10 border border-[#c7f248]/20 text-[#c7f248] rounded-br-none${
+                                msg.failed ? ' opacity-50' : ''
+                              }`
+                            : 'bg-[#2a2a2a] text-white rounded-bl-none'
+                        }`}
+                      >
                         {msg.content}
-                        {msg.failed && <span className="ml-2 text-[10px] text-red-400">Failed to send</span>}
+                        {msg.failed && (
+                          <span className="ml-2 text-[10px] text-red-400">Failed to send</span>
+                        )}
                       </div>
                       <span className="text-[10px] text-neutral-500 font-medium">{msg.time}</span>
                     </div>
                   ))
                 )}
 
+                {/* AI typing indicator */}
                 {isAiTyping && (
                   <div className="flex flex-col gap-2 max-w-[75%] self-start items-start">
                     <div className="px-4 py-3 rounded-2xl bg-[#2a2a2a] rounded-bl-none flex gap-1.5 items-center h-11">
-                      <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <span
+                        className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce"
+                        style={{ animationDelay: '0ms' }}
+                      />
+                      <span
+                        className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce"
+                        style={{ animationDelay: '150ms' }}
+                      />
+                      <span
+                        className="w-1.5 h-1.5 bg-neutral-400 rounded-full animate-bounce"
+                        style={{ animationDelay: '300ms' }}
+                      />
                     </div>
                   </div>
                 )}
               </div>
 
+              {/* Input footer */}
               <footer className="p-6">
                 <div className="bg-[#0e0e0e] border border-white/5 rounded-2xl p-2 flex items-center gap-2 shadow-xl">
                   <textarea
@@ -370,7 +454,12 @@ const ClinicalMessenger = () => {
                     rows="1"
                     value={inputValue}
                     onChange={e => setInputValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                   />
                   <button
                     onClick={handleSendMessage}
@@ -390,6 +479,7 @@ const ClinicalMessenger = () => {
           )}
         </section>
       </main>
+
       <MobileNav />
     </div>
   );

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { MobileNav, Sidebar, Topbar } from '../components';
-import { API_BASE_URL } from '../config/port';
+import React, { useState, useMemo } from 'react';
+import { MobileNav, Sidebar, Topbar } from '../../../components';
+import usePlans from '../hooks/usePlan';
+
 
 // ─── ICON ─────────────────────────────────────────────────────────────────────
 const Icon = ({ name, className = '', fill = 0, weight = 300 }) => (
@@ -401,7 +402,7 @@ const FindPlan = ({ plans, onOpen, onEnroll, onContinue }) => {
 
   const filtered = useMemo(() => plans.filter(p => {
     const q = query.toLowerCase();
-    const matchesQuery = !q || p.title.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q) || p.tag?.toLowerCase().includes(q);
+    const matchesQuery     = !q || p.title.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q) || p.tag?.toLowerCase().includes(q);
     const matchesIntensity = intensity === 'All' || p.intensity === intensity;
     const matchesFocus     = focus === 'All'     || p.target_focus?.toLowerCase().includes(focus.toLowerCase());
     const matchesDuration  = duration === 'All'  || p.duration === duration;
@@ -503,12 +504,12 @@ const FindPlan = ({ plans, onOpen, onEnroll, onContinue }) => {
 
 // ─── EXPLORE TAB ──────────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { label: 'All',          icon: 'grid_view',       tag: null },
-  { label: 'Strength',     icon: 'fitness_center',  tag: 'Strength' },
-  { label: 'Fat Loss',     icon: 'local_fire_department', tag: 'Fat Loss' },
-  { label: 'Recovery',     icon: 'spa',             tag: 'Recovery' },
-  { label: 'Cardio',       icon: 'directions_run',  tag: 'Cardio' },
-  { label: 'Flexibility',  icon: 'self_improvement',tag: 'Flexibility' },
+  { label: 'All',         icon: 'grid_view',            tag: null },
+  { label: 'Strength',    icon: 'fitness_center',       tag: 'Strength' },
+  { label: 'Fat Loss',    icon: 'local_fire_department', tag: 'Fat Loss' },
+  { label: 'Recovery',    icon: 'spa',                  tag: 'Recovery' },
+  { label: 'Cardio',      icon: 'directions_run',       tag: 'Cardio' },
+  { label: 'Flexibility', icon: 'self_improvement',     tag: 'Flexibility' },
 ];
 
 const Explore = ({ plans, onOpen, onEnroll, onContinue }) => {
@@ -632,98 +633,27 @@ const TabBar = ({ active, onChange, enrolledCount }) => (
 // ─── MAIN PLANS PAGE ──────────────────────────────────────────────────────────
 const Plans = () => {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [trainingPlans,   setTrainingPlans]   = useState([]);
-  const [loading,         setLoading]         = useState(true);
-  const [activeTab,       setActiveTab]       = useState('explore');
+  const [activeTab, setActiveTab] = useState('explore');
 
-  const [detailPlan,       setDetailPlan]       = useState(null);
-  const [trackerPlan,      setTrackerPlan]      = useState(null);
-  const [trackerContent,   setTrackerContent]   = useState([]);
-  const [trackerProgress,  setTrackerProgress]  = useState([]);
+  const {
+    loading,
+    trainingPlans,
+    enrolledCount,
+    detailPlan,
+    trackerPlan,
+    trackerContent,
+    trackerProgress,
+    setDetailPlan,
+    handleEnroll,
+    startTracker,
+    handleCompleteDay,
+    closeTracker,
+  } = usePlans();
 
-  // ✅ Cookie-based auth — get user via /api/auth/me
-  const [USER_ID, setUSER_ID] = useState(null);
-
-  useEffect(() => {
-    const getUser = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' });
-        if (!res.ok) return;
-        const data = await res.json();
-        setUSER_ID(data.id);
-      } catch (err) {
-        console.error('Auth error:', err);
-      }
-    };
-    getUser();
-  }, []);
-
-  const fetchMarketplace = async () => {
-    if (!USER_ID) return;
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/plans/${USER_ID}`, { credentials: 'include' });
-      setTrainingPlans(await res.json());
-    } catch (err) {
-      console.error('Marketplace Sync Error:', err);
-    } finally {
-      setLoading(false);
-    }
+  const handleEnrollAndSwitch = async (planId) => {
+    await handleEnroll(planId);
+    setActiveTab('my-plans');
   };
-
-  useEffect(() => { fetchMarketplace(); }, [USER_ID]);
-
-  const handleEnroll = async (planId) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/plans/enroll`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ userId: USER_ID, planId }),
-      });
-      if (res.ok) {
-        fetchMarketplace();
-        setActiveTab('my-plans');
-      }
-    } catch (err) {
-      console.error('Enrollment failed:', err);
-    }
-  };
-
-  const startTracker = async (plan) => {
-    setDetailPlan(null);
-    try {
-      const [contentRes, progressRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/plans/content/${plan.id}`,              { credentials: 'include' }),
-        fetch(`${API_BASE_URL}/api/plans/progress/${USER_ID}/${plan.id}`,  { credentials: 'include' }),
-      ]);
-      setTrackerContent(await contentRes.json());
-      setTrackerProgress(await progressRes.json());
-      setTrackerPlan(plan);
-    } catch (err) {
-      console.error('Tracker load error:', err);
-    }
-  };
-
-  const handleCompleteDay = async (dayNumber) => {
-    try {
-      await fetch(`${API_BASE_URL}/api/plans/progress/complete`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ userId: USER_ID, planId: trackerPlan.id, dayNumber }),
-      });
-      setTrackerProgress(prev => {
-        const exists = prev.find(p => p.day_number === dayNumber);
-        if (exists) return prev.map(p => p.day_number === dayNumber ? { ...p, is_completed: 1 } : p);
-        return [...prev, { day_number: dayNumber, is_completed: 1 }];
-      });
-    } catch (err) {
-      console.error('Complete day error:', err);
-    }
-  };
-
-  const enrolledCount = trainingPlans.filter(p => p.is_enrolled === 1).length;
 
   return (
     <div className="min-h-screen bg-[#131313] text-[#e5e2e1] font-[Inter,sans-serif]">
@@ -774,7 +704,7 @@ const Plans = () => {
                 <FindPlan
                   plans={trainingPlans}
                   onOpen={setDetailPlan}
-                  onEnroll={handleEnroll}
+                  onEnroll={handleEnrollAndSwitch}
                   onContinue={startTracker}
                 />
               )}
@@ -782,7 +712,7 @@ const Plans = () => {
                 <Explore
                   plans={trainingPlans}
                   onOpen={setDetailPlan}
-                  onEnroll={handleEnroll}
+                  onEnroll={handleEnrollAndSwitch}
                   onContinue={startTracker}
                 />
               )}
@@ -800,7 +730,7 @@ const Plans = () => {
             if (detailPlan.is_enrolled === 1) {
               startTracker(detailPlan);
             } else {
-              handleEnroll(detailPlan.id);
+              handleEnrollAndSwitch(detailPlan.id);
               setDetailPlan(null);
             }
           }}
@@ -813,7 +743,7 @@ const Plans = () => {
           plan={trackerPlan}
           content={trackerContent}
           progress={trackerProgress}
-          onClose={() => { setTrackerPlan(null); fetchMarketplace(); }}
+          onClose={closeTracker}
           onCompleteDay={handleCompleteDay}
         />
       )}

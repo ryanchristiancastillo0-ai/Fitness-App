@@ -42,6 +42,7 @@ const dailyNutrition   = require('./route/dailyNutrition');
 const bmiRoutes        = require('./route/bmi');
 const clinicalRoutes    = require('./route/clinic')
 const activityRoutes    = require('./route/activity')
+const securityRoutes = require('./route/security')
 
 app.use('/api/bmi',       bmiRoutes);
 app.use('/api/auth',      authRoutes);
@@ -54,11 +55,14 @@ app.use('/api/plans',     plansRoutes);
 app.use('/api/profile',   profileRoutes);
 app.use('/api',           aiRoutes);
 app.use('/api/atelier',   atelierRoutes);
-app.use('api/activity',   sleepRoutes);
 app.use('/api/food-logs', foodLogs);
 app.use('/api/nutrition', dailyNutrition);
 app.use('/api/clinic', clinicalRoutes)
 app.use('/api/activity', activityRoutes)
+app.use('/api/profile', profileRoutes)
+app.use('/api/security', securityRoutes)
+
+
 // ─── Socket.IO ────────────────────────────────────────────────────────────────
 require('./socket/socketHandler')(io);
 

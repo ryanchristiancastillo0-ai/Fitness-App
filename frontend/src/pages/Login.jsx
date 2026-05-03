@@ -14,32 +14,40 @@ const Login = () => {
   const { setUser } = useAuth();
 
 const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method:  'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body:     JSON.stringify({ email, password }),
-      });
-      
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Biometric synchronization failed.');
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-      // ✅ Normalize the user ID check
-      const userId = data?.id || data?.user?.id;
-      if (!userId) throw new Error('Login response did not include a user ID.');
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-      setUser(data);
-      navigate('/dashboard');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Login failed');
     }
-  };
+
+    // ✅ FIX: define userId properly
+    const userId = data?.id || data?.user?.id;
+    if (!userId) throw new Error('Login response did not include a user ID.');
+
+    setUser(data);
+
+    // 🔥 SECURITY LOG (correct placement)
+   
+
+    navigate('/dashboard');
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGoogleSuccess = async (codeResponse) => {
     setError('');

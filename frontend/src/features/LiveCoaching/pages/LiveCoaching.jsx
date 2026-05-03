@@ -63,7 +63,7 @@ export default function LiveCoaching() {
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white flex">
 
-      {/* ── Sidebar ─────────────────────────────────────────────── */}
+   
     <Sidebar
           onClick={handleLogout} 
           expanded={sidebarExpanded} 

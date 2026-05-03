@@ -3,6 +3,7 @@ const router  = express.Router();
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const db      = require('../config/db');
+const UAParser = require('ua-parser-js');
 const { OAuth2Client } = require('google-auth-library');
 
 const googleClient = new OAuth2Client(
@@ -142,6 +143,41 @@ router.post('/register', async (req, res) => {
   }
 });
 
+
+const logUserSession = async (req, userId) => {
+  try {
+    const parser = new UAParser(req.headers['user-agent']);
+    const result = parser.getResult();
+
+    const device  = result.device.type || 'Desktop';
+    const browser = result.browser.name || 'Unknown';
+    const os      = result.os.name || 'Unknown';
+
+    const ip =
+      req.headers['x-forwarded-for']?.split(',')[0] ||
+      req.socket?.remoteAddress ||
+      req.ip ||
+      'Unknown';
+
+    const location = 'Unknown';
+
+    await db.execute(
+      'UPDATE user_sessions SET is_current = false WHERE user_id = ?',
+      [userId]
+    );
+
+    await db.execute(
+      `INSERT INTO user_sessions 
+      (user_id, device, browser, os, ip_address, location, is_current)
+      VALUES (?, ?, ?, ?, ?, ?, true)`,
+      [userId, device, browser, os, ip, location]
+    );
+
+  } catch (err) {
+    console.error('SESSION LOG ERROR:', err);
+  }
+};
+
 // ─────────────────────────────────────────────
 //  POST /api/auth/login
 // ─────────────────────────────────────────────
@@ -188,6 +224,7 @@ router.post('/login', async (req, res) => {
     await db.execute('UPDATE users SET is_online = 1 WHERE id = ?', [user.id]);
 
     setSessionCookie(res, user.id, user.email);
+    await logUserSession(req, user.id);
 
     // Return user info (NO token in body — it lives in the HttpOnly cookie)
     res.json({

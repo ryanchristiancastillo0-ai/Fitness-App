@@ -99,10 +99,10 @@ const Topbar = ({ sidebarExpanded, userId }) => {
   };
 
   const SETTINGS_ITEMS = [
-    { icon: 'person', label: 'Profile', accent: true, action: () => navigate('/profile') },
-    { icon: 'tune', label: 'Preferences', action: () => navigate('/preferences') },
-    { icon: 'notifications', label: 'Notifications', action: () => navigate('/notifications') },
-    { icon: 'lock', label: 'Privacy', action: () => navigate('/privacy') },
+    { icon: 'person', label: 'Profile', accent: true, action: () => navigate('/dashboard/profile') },
+    { icon: 'tune', label: 'Preferences', action: () => navigate('dashboard/preferences') },
+    { icon: 'notifications', label: 'Notifications', action: () => navigate('dashboard/notifications') },
+    { icon: 'lock', label: 'Privacy', action: () => navigate('dashboard/privacy') },
     { icon: 'help_outline', label: 'Help & Support', action: () => window.open('https://support.vitalis.app', '_blank') },
   ];
 
