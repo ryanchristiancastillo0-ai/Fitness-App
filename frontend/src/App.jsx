@@ -9,7 +9,6 @@ import Analytics from "./features/Analytics/pages/Analytics";
 import Offline from "./pages/Offline";
 import CameraWorkout from "./features/CameraWorkout/pages/CameraWorkout";
 import Jogging from "./pages/Jogging";
-import Profile from "./pages/Profile";
 import Log from "./pages/Log";
 import Records from "./pages/Record";
 
@@ -22,12 +21,16 @@ import BMI from "./pages/BMI";
 
 import VirtualClinic from "./features/Coach/pages/virtual-clinic";
 import ActivityMap from "./pages/ActivityMap";
+import Profile from "./features/Profile/pages/Profile";
+import {  NotificationProvider } from './context/NotificationSystem';
 
 export default function App() {
   return (
-    <div className="w-full min-h-screen">
+    <div className="w-auto min-h-screen">
       <AuthProvider>
-        <RoutesHandler />
+       <NotificationProvider>
+         <RoutesHandler />
+       </NotificationProvider>
       </AuthProvider>
     </div>
   );

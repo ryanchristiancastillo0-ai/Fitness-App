@@ -1,6 +1,7 @@
  export  const navList = [
     { name: "Dashboard", icon: "speed", path: "/dashboard" },
     { name: "Sleep Stats", icon: "monitoring", path: "/dashboard/analytics" },
+     { name: "Jogging", icon: "directions_run", path: "/dashboard/activity-map" },
     { name: "Workouts", icon: "exercise", path: "/dashboard/workouts" },
     { name: "Logs", icon: "history", path: "/dashboard/logs" },
   ];

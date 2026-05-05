@@ -141,15 +141,15 @@ const RunSummaryOverlay = ({ metrics, splits, formatTime, onSave, onDiscard, isS
     <div className="absolute bottom-0 left-0 right-0 pointer-events-auto">
       <div
         className="bg-gradient-to-t from-black via-black/96 to-transparent pt-8 sm:pt-10 px-3 sm:px-4 md:px-6"
-        style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 1.25rem))' }}
+        style={{ paddingBottom: 'max(5rem, calc(env(safe-area-inset-bottom, 0px) + 5rem))' }}
       >
-        {/* Stats grid — 2 cols on xs, 4 cols on sm+ */}
+        {/* Stats grid */}
         <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-3 sm:mb-4">
           {[
-            { val: (metrics.distance || 0).toFixed(2), label: 'Distance', unit: 'km' },
-            { val: formatTime(metrics.time),            label: 'Time',     unit: ''   },
-            { val: metrics.pace || '–',                 label: 'Pace',     unit: '/km'},
-            { val: metrics.calories || 0,               label: 'Calories', unit: 'kcal'},
+            { val: (metrics.distance || 0).toFixed(2), label: 'Distance', unit: 'km'   },
+            { val: formatTime(metrics.time),            label: 'Time',     unit: ''     },
+            { val: metrics.pace || '–',                 label: 'Pace',     unit: '/km'  },
+            { val: metrics.calories || 0,               label: 'Calories', unit: 'kcal' },
           ].map(({ val, label, unit }) => (
             <div key={label} className="bg-white/5 border border-white/5 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 text-center">
               <p className="text-base sm:text-lg md:text-xl font-black italic tracking-tighter text-white leading-none">
@@ -200,7 +200,6 @@ const RunSummaryOverlay = ({ metrics, splits, formatTime, onSave, onDiscard, isS
 const StatsPanel = ({ metrics, splits, formatTime, isDesktop }) => {
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Desktop side panel
   if (isDesktop) {
     return (
       <div className="w-[300px] xl:w-[340px] 2xl:w-[380px] flex-shrink-0 bg-[#131313] flex flex-col gap-4 xl:gap-5 p-4 xl:p-5 overflow-y-auto border-l border-white/5">
@@ -258,11 +257,11 @@ const StatsPanel = ({ metrics, splits, formatTime, isDesktop }) => {
     );
   }
 
-  // Mobile bottom sheet
+  // Mobile bottom sheet — sits ABOVE the mobile nav (80px) + safe area
   return (
     <div
       className="absolute left-0 right-0 z-[800] px-3 sm:px-4 pointer-events-auto"
-      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
+      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)' }}
     >
       {!sheetOpen ? (
         <button
@@ -331,32 +330,38 @@ const StatsPanel = ({ metrics, splits, formatTime, isDesktop }) => {
 const RunControls = ({ isRecording, hasPaused, metricsTime, onStart, onPauseResume, onFinish }) => (
   <div
     className="absolute z-[1000] left-1/2 -translate-x-1/2 w-max"
-    style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.25rem)' }}
+    // FIX: on mobile, sit above MobileNav (~80px) + safe area; on md+ use 1.25rem
+    style={{
+      bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)',
+    }}
   >
-    {!isRecording && !hasPaused && metricsTime === 0 ? (
-      <button
-        onClick={onStart}
-        className="bg-[#D1FD52] text-black px-8 sm:px-10 md:px-12 py-3 sm:py-4 rounded-full font-black uppercase italic tracking-tighter
-          hover:scale-105 active:scale-95 transition-all shadow-[0_0_40px_rgba(209,253,82,0.25)] text-sm sm:text-base"
-      >
-        Start Activity
-      </button>
-    ) : (
-      <div className="flex items-center gap-2 sm:gap-3 bg-[#1a1a1a]/90 backdrop-blur-md p-1.5 sm:p-2 rounded-full border border-white/10 shadow-2xl">
+    {/* On md+ we override with a Tailwind class via a wrapper */}
+    <div className="md:!bottom-5 relative">
+      {!isRecording && !hasPaused && metricsTime === 0 ? (
         <button
-          onClick={onPauseResume}
-          className="w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
+          onClick={onStart}
+          className="bg-[#D1FD52] text-black px-8 sm:px-10 md:px-12 py-3 sm:py-4 rounded-full font-black uppercase italic tracking-tighter
+            hover:scale-105 active:scale-95 transition-all shadow-[0_0_40px_rgba(209,253,82,0.25)] text-sm sm:text-base"
         >
-          <span className="text-[9px] sm:text-[10px] sm:text-[11px] font-black">{isRecording ? 'PAUSE' : 'RESUME'}</span>
+          Start Activity
         </button>
-        <button
-          onClick={onFinish}
-          className="bg-red-500/20 text-red-400 px-5 sm:px-6 md:px-8 py-2.5 sm:py-3 rounded-full font-bold uppercase text-[9px] sm:text-[10px] tracking-widest hover:bg-red-500 hover:text-white active:scale-95 transition-all"
-        >
-          Finish
-        </button>
-      </div>
-    )}
+      ) : (
+        <div className="flex items-center gap-2 sm:gap-3 bg-[#1a1a1a]/90 backdrop-blur-md p-1.5 sm:p-2 rounded-full border border-white/10 shadow-2xl">
+          <button
+            onClick={onPauseResume}
+            className="w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 active:scale-95 transition-all"
+          >
+            <span className="text-[9px] sm:text-[10px] font-black">{isRecording ? 'PAUSE' : 'RESUME'}</span>
+          </button>
+          <button
+            onClick={onFinish}
+            className="bg-red-500/20 text-red-400 px-5 sm:px-6 md:px-8 py-2.5 sm:py-3 rounded-full font-bold uppercase text-[9px] sm:text-[10px] tracking-widest hover:bg-red-500 hover:text-white active:scale-95 transition-all"
+          >
+            Finish
+          </button>
+        </div>
+      )}
+    </div>
   </div>
 );
 
@@ -474,10 +479,10 @@ const StatsTab = ({ stats, statsLoading, statsError, formatTime }) => (
       {!statsLoading && !statsError && stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 max-w-2xl">
           {[
-            { label: 'Total Runs',      val: stats.totalRuns ?? '–',                          unit: ''    },
-            { label: 'Total Distance',  val: parseFloat(stats.totalDistance || 0).toFixed(1), unit: 'km'  },
-            { label: 'Total Time',      val: formatTime(parseInt(stats.totalDuration) || 0),  unit: ''    },
-            { label: 'Calories Burned', val: parseInt(stats.totalCalories) || 0,              unit: 'kcal'},
+            { label: 'Total Runs',      val: stats.totalRuns ?? '–',                          unit: ''     },
+            { label: 'Total Distance',  val: parseFloat(stats.totalDistance || 0).toFixed(1), unit: 'km'   },
+            { label: 'Total Time',      val: formatTime(parseInt(stats.totalDuration) || 0),  unit: ''     },
+            { label: 'Calories Burned', val: parseInt(stats.totalCalories) || 0,              unit: 'kcal' },
           ].map(({ label, val, unit }) => (
             <div key={label} className="bg-[#1a1a1a] border border-white/5 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-5">
               <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-white/25 mb-1.5 sm:mb-2">{label}</p>
@@ -495,10 +500,9 @@ const StatsTab = ({ stats, statsLoading, statsError, formatTime }) => (
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ActivityMap = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const USER_ID = user?.id || null;
 
-  // Viewport width tracker for responsive panel rendering
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== 'undefined' ? window.innerWidth : 1024
   );
@@ -507,7 +511,7 @@ const ActivityMap = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  const isLargeScreen = windowWidth >= 1024; // lg breakpoint
+  const isLargeScreen = windowWidth >= 1024;
 
   // Geolocation
   const [userLocation, setUserLocation]     = useState(null);
@@ -516,6 +520,7 @@ const ActivityMap = () => {
   const [mapCenter, setMapCenter]           = useState(FALLBACK_COORDS);
 
   // UI
+  // FIX: sidebar uses same pattern as Dashboard
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [activeTab, setActiveTab]             = useState('run');
   const [toast, setToast]                     = useState({ visible: false, message: '', type: 'ok' });
@@ -545,7 +550,7 @@ const ActivityMap = () => {
   const [statsLoading, setStatsLoading]     = useState(false);
   const [statsError, setStatsError]         = useState(null);
 
-  // ─── Geolocation on mount ──────────────────────────────────────────────────
+  // ─── Geolocation on mount ────────────────────────────────────────────────
   useEffect(() => {
     if (!navigator.geolocation) { setLocationStatus('denied'); return; }
     navigator.geolocation.getCurrentPosition(
@@ -559,7 +564,7 @@ const ActivityMap = () => {
     );
   }, []);
 
-  // ─── GPS watch while recording ─────────────────────────────────────────────
+  // ─── GPS watch while recording ───────────────────────────────────────────
   useEffect(() => {
     if (isRecording && navigator.geolocation) {
       watchIdRef.current = navigator.geolocation.watchPosition(
@@ -582,7 +587,7 @@ const ActivityMap = () => {
     };
   }, [isRecording]);
 
-  // ─── Toast helper ──────────────────────────────────────────────────────────
+  // ─── Toast helper ────────────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'ok') => {
     setToast({ visible: true, message, type });
     setTimeout(() => setToast(t => ({ ...t, visible: false })), 2800);
@@ -596,7 +601,7 @@ const ActivityMap = () => {
     return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${sc.toString().padStart(2, '0')}`;
   };
 
-  // ─── Timer + mock movement ─────────────────────────────────────────────────
+  // ─── Timer + mock movement ───────────────────────────────────────────────
   useEffect(() => {
     if (isRecording) {
       timerRef.current = setInterval(() => {
@@ -630,7 +635,7 @@ const ActivityMap = () => {
     return () => clearInterval(timerRef.current);
   }, [isRecording, locationStatus]);
 
-  // ─── Run controls ──────────────────────────────────────────────────────────
+  // ─── Run controls ────────────────────────────────────────────────────────
   const handleStartRun = () => {
     const origin = userLocation || startCoords;
     setMetrics({ time: 0, distance: 0, pace: "0'00\"", calories: 0 });
@@ -659,7 +664,7 @@ const ActivityMap = () => {
     setHasPaused(false);
   };
 
-  // ─── API calls ─────────────────────────────────────────────────────────────
+  // ─── API calls ───────────────────────────────────────────────────────────
   const handleSaveActivity = async () => {
     if (!USER_ID) { showToast('⚠ Not logged in', 'error'); return; }
     setIsSaving(true);
@@ -724,19 +729,27 @@ const ActivityMap = () => {
     if (activeTab === 'stats')   fetchStats();
   }, [activeTab, fetchHistory, fetchStats]);
 
-  // ─── Sidebar offsets ───────────────────────────────────────────────────────
-  const sidebarW = sidebarExpanded ? 'md:ml-[240px]' : 'md:ml-[72px] ml-0';
-  const tabLeft  = sidebarExpanded ? 'md:left-[240px]' : 'md:left-[72px] left-0';
+  // ─── Sidebar margin helpers — identical pattern to Dashboard ─────────────
+  const sidebarW  = sidebarExpanded ? 'md:ml-[240px]' : 'md:ml-[72px] ml-0';
+  const tabLeft   = sidebarExpanded ? 'md:left-[240px]' : 'md:left-[72px] left-0';
 
-  // ─── RENDER ────────────────────────────────────────────────────────────────
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  // ─── RENDER ──────────────────────────────────────────────────────────────
   return (
     <div
       className="min-h-screen bg-[#131313] text-[#e5e2e1] overflow-hidden"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
-      {/* Sidebar (desktop only) */}
+      {/* FIX: Sidebar — same pattern as Dashboard: hidden on mobile, fixed on desktop */}
       <div className="hidden md:block">
-        <Sidebar expanded={sidebarExpanded} setExpanded={setSidebarExpanded} />
+        <Sidebar
+          expanded={sidebarExpanded}
+          setExpanded={setSidebarExpanded}
+          onClick={handleLogout}
+        />
       </div>
 
       {/* Topbar */}
@@ -840,7 +853,7 @@ const ActivityMap = () => {
                 onFinish={handleFinish}
               />
 
-              {/* Mobile stats sheet (only renders on small screens) */}
+              {/* Mobile stats sheet */}
               {!isLargeScreen && (
                 <StatsPanel
                   metrics={metrics}
@@ -851,7 +864,7 @@ const ActivityMap = () => {
               )}
             </div>
 
-            {/* Desktop side panel (only renders on large screens) */}
+            {/* Desktop side panel */}
             {isLargeScreen && (
               <StatsPanel
                 metrics={metrics}

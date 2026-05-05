@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const notificationRouter = require('./notification');
+const clients = notificationRouter.clients;
 // Import both functions
 const { callGeminiWithFallback, analyzeFoodImage } = require('../config/gemini');
-
+   const { sendMealSummaryEmail } = require('../config/mailer');
 // ── NEW ROUTE: POST /api/food-logs/analyze-pic ──────────────────────────
 router.post('/analyze-pic', async (req, res) => {
     const { base64Image } = req.body; // Expecting base64 string from frontend
@@ -38,8 +40,60 @@ router.post('/:userId', async (req, res) => {
              VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
             [userId, food_name, calories || 0, protein || 0, carbs || 0, fat || 0, image_url || null]
         );
-        res.status(200).json({ message: 'Food log saved', id: result.insertId });
+        
+        
+
+        const [userRows] = await db.execute(
+  'SELECT email FROM users WHERE id = ?',
+  [userId]
+  
+);
+
+const user = userRows[0];
+
+const [summaryRows] = await db.execute(
+  `SELECT 
+    COALESCE(SUM(calories),0) as calories,
+    COALESCE(SUM(protein),0) as protein,
+    COALESCE(SUM(carbs),0) as carbs,
+    COALESCE(SUM(fat),0) as fat
+   FROM food_logs
+   WHERE user_id = ? AND DATE(logged_at) = CURDATE()`,
+  [userId]
+);
+
+const summary = summaryRows[0];
+
+// Test 1 - email
+if (user?.email) {
+  try {
+    await sendMealSummaryEmail(user.email, summary);
+  } catch (mailErr) {
+    console.error('❌ MAILER FAILED:', mailErr.message);
+  }
+}
+
+// Test 2 - notification insert
+try {
+  const notifMessage = `Meal logged! Today: ${Math.round(summary.calories)} kcal | P: ${Math.round(summary.protein)}g | C: ${Math.round(summary.carbs)}g | F: ${Math.round(summary.fat)}g`;
+  await db.execute(
+    'INSERT INTO notifications (user_id, message) VALUES (?, ?)',
+    [userId, notifMessage]
+  );
+
+  // Test 3 - SSE push
+  const client = clients.get(String(userId));
+  if (client) {
+    client.write(`data: ${JSON.stringify({ message: notifMessage, type: 'success' })}\n\n`);
+  }
+} catch (notifErr) {
+  console.error('❌ NOTIFICATION FAILED:', notifErr.message);
+}
+
+res.status(200).json({ message: 'Food log saved', id: result.insertId });
+        
     } catch (err) {
+        console.error('FOOD LOG ERROR:', err.message);
         res.status(500).json({ error: 'Database error', details: err.message });
     }
 });
@@ -59,8 +113,9 @@ router.get('/:userId', async (req, res) => {
         );
         const [[{ total }]] = await db.execute(`SELECT COUNT(*) AS total FROM food_logs WHERE user_id = ?`, [userId]);
         res.json({ records: rows, total });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+   } catch (err) {
+        console.error('FOOD LOG ERROR:', err.message);
+        res.status(500).json({ error: 'Database error', details: err.message });
     }
 });
 

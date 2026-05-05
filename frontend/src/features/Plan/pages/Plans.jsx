@@ -607,19 +607,19 @@ const TABS = [
 ];
 
 const TabBar = ({ active, onChange, enrolledCount }) => (
-  <div className="flex gap-1 bg-[#1a1a1a] border border-white/8 rounded-xl p-1 w-fit mb-10">
+  <div className="flex gap-1 bg-[#1a1a1a] border border-white/8 rounded-xl p-1 w-full max-w-full overflow-x-auto md:w-fit mb-10">
     {TABS.map(tab => (
       <button
         key={tab.id}
         onClick={() => onChange(tab.id)}
-        className={`relative flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+        className={`relative flex flex-shrink-0 whitespace-nowrap items-center gap-1.5 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-lg text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${
           active === tab.id ? 'bg-[#D1FD52] text-black' : 'text-neutral-500 hover:text-neutral-300'
         }`}
       >
-        <Icon name={tab.icon} className="text-[16px]" fill={active === tab.id ? 1 : 0} />
+        <Icon name={tab.icon} className="text-[14px] md:text-[16px]" fill={active === tab.id ? 1 : 0} />
         {tab.label}
         {tab.id === 'my-plans' && enrolledCount > 0 && (
-          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+          <span className={`text-[9px] md:text-[10px] font-black px-1.5 py-0.5 rounded-full ${
             active === tab.id ? 'bg-black/20 text-black' : 'bg-[#D1FD52]/15 text-[#D1FD52]'
           }`}>
             {enrolledCount}
@@ -629,7 +629,6 @@ const TabBar = ({ active, onChange, enrolledCount }) => (
     ))}
   </div>
 );
-
 // ─── MAIN PLANS PAGE ──────────────────────────────────────────────────────────
 const Plans = () => {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);

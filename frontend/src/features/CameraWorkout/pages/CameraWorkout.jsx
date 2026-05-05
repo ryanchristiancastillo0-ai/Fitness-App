@@ -1,21 +1,22 @@
 import { useState, useRef } from 'react';
 import Webcam from 'react-webcam';
 import { Icon } from '../../../components';
-import SidebarAnalytics from '../../../components/sidebarAnalytics';
+import { Sidebar } from '../../../components';
 
 import { WORKOUT_OPTIONS } from '../constants/workout';
 import { useRepCounter, speak } from '../hooks/useRepCounter';
-import { useAICoach }          from '../hooks/useAICoach';
-import { usePoseEngine }       from '../hooks/usePoseEngine';
+import { useAICoach }           from '../hooks/useAICoach';
+import { usePoseEngine }        from '../hooks/usePoseEngine';
+import { useWorkoutSession } from '../hooks/useWorkoutSession';
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Sub-components
+// Sub-components (unchanged)
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── Mobile pill selector ───────────────────────────────────────────────────
 function MobileWorkoutPills({ workoutType, onSelect }) {
   return (
-    <div className="sm:hidden mb-6 bg-[#0e0e0e] border-b border-white/[0.03] px-3 py-3 flex gap-2 overflow-x-auto no-scrollbar">
+    <div className="sm:hidden mb-6 bg-[#0e0e0e] border-b border-white/[0.03]
+     px-3 py-3 flex gap-2 overflow-x-auto no-scrollbar">
       {WORKOUT_OPTIONS.map((opt) => (
         <button
           key={opt.id}
@@ -34,10 +35,10 @@ function MobileWorkoutPills({ workoutType, onSelect }) {
   );
 }
 
-// ── Desktop dropdown selector ──────────────────────────────────────────────
 function DesktopWorkoutSelector({ workoutType, onSelect }) {
   return (
-    <div className="hidden sm:flex flex-wrap bg-[#0e0e0e] border-b border-white/[0.03] px-6 py-3 items-center gap-4">
+    <div className="hidden sm:flex flex-wrap bg-[#0e0e0e] border-b border-white/[0.03]
+     px-6 py-3 items-center gap-4 ">
       <div className="flex items-center gap-2.5 pr-4 border-r border-white/5">
         <Icon name="exercise" className="text-[#D1FD52] text-xs opacity-80" />
         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">Exercise</span>
@@ -80,7 +81,6 @@ function DesktopWorkoutSelector({ workoutType, onSelect }) {
   );
 }
 
-// ── Top header bar ─────────────────────────────────────────────────────────
 function SessionHeader({ workoutType, isRecording, cameraOn, voiceEnabled, onStartStop, onCameraToggle, onVoiceToggle }) {
   return (
     <header className="sticky top-0 z-40 bg-[#0e0e0e]/80 backdrop-blur-xl border-b border-white/[0.06] min-h-[56px] md:h-16 flex items-center justify-between px-3 sm:px-6 gap-3 py-2">
@@ -102,7 +102,6 @@ function SessionHeader({ workoutType, isRecording, cameraOn, voiceEnabled, onSta
   );
 }
 
-// ── Voice toggle button ────────────────────────────────────────────────────
 function VoiceToggleButton({ voiceEnabled, onToggle }) {
   return (
     <button
@@ -119,7 +118,6 @@ function VoiceToggleButton({ voiceEnabled, onToggle }) {
   );
 }
 
-// ── Camera toggle button ───────────────────────────────────────────────────
 function CameraToggleButton({ cameraOn, onToggle }) {
   return (
     <button
@@ -137,7 +135,6 @@ function CameraToggleButton({ cameraOn, onToggle }) {
   );
 }
 
-// ── Start / Stop session button ────────────────────────────────────────────
 function StartStopButton({ isRecording, cameraOn, onPress }) {
   return (
     <button
@@ -156,8 +153,7 @@ function StartStopButton({ isRecording, cameraOn, onPress }) {
   );
 }
 
-// ── Webcam feed with overlays ──────────────────────────────────────────────
-function WebcamFeed({ webcamRef, cameraOn, isRecording, poseReady, aiFeedback, isAnalyzing, repCount, onCameraToggle }) {
+function WebcamFeed({ webcamRef, cameraOn, isRecording, poseReady, loadError, aiFeedback, isAnalyzing, repCount, onCameraToggle }) {
   return (
     <div className="col-span-1 lg:col-span-8 relative aspect-video bg-black rounded-2xl sm:rounded-[2rem] md:rounded-[3rem] overflow-hidden border border-white/5 shadow-2xl">
       <ScanLineOverlay isRecording={isRecording} cameraOn={cameraOn} />
@@ -167,18 +163,27 @@ function WebcamFeed({ webcamRef, cameraOn, isRecording, poseReady, aiFeedback, i
         <Webcam
           audio={false}
           ref={webcamRef}
+          screenshotFormat="image/jpeg"
+          videoConstraints={{ facingMode: 'user', width: 640, height: 480 }}
           className="w-full h-full object-cover grayscale-[0.2]"
         />
       )}
 
+      {loadError && (
+        <div className="absolute bottom-3 left-3 z-30 bg-red-500/20 border border-red-500/30 px-3 py-1.5 rounded-xl">
+          <p className="text-[9px] text-red-400 font-bold uppercase tracking-widest">
+            Pose AI failed to load — check your connection
+          </p>
+        </div>
+      )}
+
       <CoachFeedbackOverlay aiFeedback={aiFeedback} isAnalyzing={isAnalyzing} />
       <RepCounterOverlay repCount={repCount} />
-      <PoseStatusBadge poseReady={poseReady} />
+      <PoseStatusBadge poseReady={poseReady} loadError={loadError} />
     </div>
   );
 }
 
-// ── Scan line overlay ──────────────────────────────────────────────────────
 function ScanLineOverlay({ isRecording, cameraOn }) {
   if (!isRecording || !cameraOn) return null;
   return (
@@ -188,7 +193,6 @@ function ScanLineOverlay({ isRecording, cameraOn }) {
   );
 }
 
-// ── Camera off placeholder ─────────────────────────────────────────────────
 function CameraOffPlaceholder({ cameraOn, onTurnOn }) {
   if (cameraOn) return null;
   return (
@@ -205,7 +209,6 @@ function CameraOffPlaceholder({ cameraOn, onTurnOn }) {
   );
 }
 
-// ── Coach feedback overlay ─────────────────────────────────────────────────
 function CoachFeedbackOverlay({ aiFeedback, isAnalyzing }) {
   return (
     <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-20 max-w-[calc(100%-5rem)] sm:max-w-[280px]">
@@ -221,7 +224,6 @@ function CoachFeedbackOverlay({ aiFeedback, isAnalyzing }) {
   );
 }
 
-// ── Rep counter overlay ────────────────────────────────────────────────────
 function RepCounterOverlay({ repCount }) {
   return (
     <div className="absolute bottom-4 right-4 sm:bottom-10 sm:right-10 z-20">
@@ -237,30 +239,31 @@ function RepCounterOverlay({ repCount }) {
   );
 }
 
-// ── Pose engine status badge ───────────────────────────────────────────────
-function PoseStatusBadge({ poseReady }) {
+function PoseStatusBadge({ poseReady, loadError }) {
+  const label = loadError ? 'Load Failed' : poseReady ? 'Pose AI' : 'Loading…';
+  const style = loadError
+    ? 'bg-red-500/10 border-red-500/30 text-red-400'
+    : poseReady
+      ? 'bg-green-500/10 border-green-500/30 text-green-400'
+      : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400';
+  const dotStyle = loadError ? 'bg-red-400' : poseReady ? 'bg-green-400 animate-pulse' : 'bg-yellow-400';
+
   return (
     <div className="absolute top-3 right-3 sm:top-6 sm:right-6 z-20">
-      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[8px] font-black uppercase tracking-widest backdrop-blur-md ${
-        poseReady
-          ? 'bg-green-500/10 border-green-500/30 text-green-400'
-          : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-      }`}>
-        <div className={`w-1.5 h-1.5 rounded-full ${poseReady ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'}`} />
-        {poseReady ? 'Pose AI' : 'Loading…'}
+      <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[8px] font-black uppercase tracking-widest backdrop-blur-md ${style}`}>
+        <div className={`w-1.5 h-1.5 rounded-full ${dotStyle}`} />
+        {label}
       </div>
     </div>
   );
 }
 
-// ── Biometrics card ────────────────────────────────────────────────────────
 function BiometricsCard({ biometrics }) {
   const metrics = [
     { label: 'Body Alignment', val: biometrics.alignment, color: '#D1FD52' },
     { label: 'Rep Speed',      val: biometrics.velocity,  color: '#5BC8FF' },
     { label: 'Symmetry Index', val: biometrics.symmetry,  color: '#FF7A5C' },
   ];
-
   return (
     <div className="bg-[#111111] p-5 sm:p-8 rounded-2xl sm:rounded-[3rem] border border-white/5">
       <h4 className="text-white font-black text-[10px] mb-5 sm:mb-8 uppercase tracking-[0.3em] flex items-center gap-2">
@@ -276,7 +279,6 @@ function BiometricsCard({ biometrics }) {
   );
 }
 
-// ── Single biometric bar row ───────────────────────────────────────────────
 function BiometricBar({ label, val, color }) {
   return (
     <div>
@@ -294,7 +296,6 @@ function BiometricBar({ label, val, color }) {
   );
 }
 
-// ── Session log card ───────────────────────────────────────────────────────
 function SessionLog({ logs }) {
   if (logs.length === 0) return null;
   return (
@@ -312,7 +313,6 @@ function SessionLog({ logs }) {
   );
 }
 
-// ── Single session log row ─────────────────────────────────────────────────
 function SessionLogRow({ log }) {
   return (
     <div className="flex justify-between items-center text-[9px] py-1.5 border-b border-white/5 last:border-0">
@@ -323,7 +323,6 @@ function SessionLogRow({ log }) {
   );
 }
 
-// ── Neural status card ─────────────────────────────────────────────────────
 function NeuralStatusCard() {
   return (
     <div className="p-5 sm:p-8 rounded-2xl sm:rounded-[3rem] bg-gradient-to-br from-[#D1FD52]/5 to-transparent border border-[#D1FD52]/10">
@@ -339,7 +338,6 @@ function NeuralStatusCard() {
   );
 }
 
-// ── Right panel (composes the three right-column cards) ───────────────────
 function RightPanel({ biometrics, logs }) {
   return (
     <div className="col-span-1 lg:col-span-4 flex flex-col gap-4 sm:gap-6">
@@ -355,37 +353,66 @@ function RightPanel({ biometrics, logs }) {
 // ══════════════════════════════════════════════════════════════════════════════
 const CameraWorkout = () => {
   const [isRecording,  setIsRecording]  = useState(false);
-  const [cameraOn,     setCameraOn]     = useState(true);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+const [cameraOn,     setCameraOn]     = useState(() => localStorage.getItem('vitalis_cameraOn')  !== 'false');
+const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('vitalis_voiceEnabled') !== 'false');
   const [workoutType,  setWorkoutType]  = useState('pushup');
   const [logs,         setLogs]         = useState([]);
-
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [biometrics, setBiometrics] = useState({ alignment: 0, velocity: 0, symmetry: 0 });
 
   const webcamRef = useRef(null);
 
-  // ── Hooks ────────────────────────────────────────────────────────────────
   const { repCount, repCountRef, countRep, resetReps } = useRepCounter({ workoutType, voiceEnabled });
   const { aiFeedback, isAnalyzing, setAiFeedback, maybeAnalyze } = useAICoach({ workoutType, voiceEnabled });
-
-  const { poseReady } = usePoseEngine({
+  const { startSession, endSession } = useWorkoutSession();  
+  // ── FIX: onPoseResult now handles null landmarks (camera blocked / no body) ──
+  const { poseReady, loadError } = usePoseEngine({
     isRecording,
     cameraOn,
     webcamRef,
     workoutType,
-    onPoseResult: (landmarks) => {
-      const criticalPoints = [23, 24, 25, 26];
-      const isVisible = criticalPoints.every(i => landmarks[i].visibility > 0.5);
-
-      if (!isVisible && isRecording) {
-        setAiFeedback('Camera misaligned. Position your full body in view.');
+    onPoseResult: (landmarks, type, noDetectCount) => {
+      // Camera blocked or no body in frame
+      if (!landmarks) {
+        if (isRecording) {
+          // Only speak after 3+ consecutive missing frames (~450ms) to avoid spam
+          if (noDetectCount === 3) {
+            const msg = 'Camera blocked — step back so your full body is visible';
+            setAiFeedback(msg);
+            if (voiceEnabled) speak(msg, 0.95, 1.0);
+          }
+          maybeAnalyze(null); // AI also gets a chance to respond
+        }
+        setBiometrics({ alignment: 0, velocity: 0, symmetry: 0 });
         return;
       }
+
+      // ── FIX: use exercise-appropriate keypoints for visibility check ──
+      // Upper-body exercises only need shoulders + elbows + wrists
+      // Lower-body exercises need hips + knees + ankles
+      const upperBody = ['pushup', 'bicep_curl', 'overhead', 'lateral_raise'];
+      const checkPoints = upperBody.includes(type)
+        ? [11, 12, 13, 14] // shoulders + elbows
+        : [23, 24, 25, 26]; // hips + knees
+
+      const isVisible = checkPoints.every(
+        (i) => landmarks[i] && landmarks[i].visibility > 0.4
+      );
+
+      if (!isVisible && isRecording) {
+        const msg = 'Move back — position your full body in the camera view';
+        setAiFeedback(msg);
+        if (voiceEnabled) speak(msg, 0.95, 1.0);
+        setBiometrics(prev => ({ ...prev, alignment: 30 }));
+        return;
+      }
+
       if (isRecording && isVisible) {
-        countRep(landmarks, workoutType);
+        countRep(landmarks, type);
         maybeAnalyze(landmarks);
       }
 
+      // Biometrics
       const lShoulder = landmarks[11];
       const rShoulder = landmarks[12];
       const symScore  = Math.max(0, 100 - Math.abs(lShoulder.y - rShoulder.y) * 500);
@@ -396,42 +423,44 @@ const CameraWorkout = () => {
       });
     },
   });
+const handleStartStop = async () => {
+  if (!isRecording) {
+    await startSession(workoutType);        // ← was startSession()
+    resetReps();
+    const opt = WORKOUT_OPTIONS.find(o => o.id === workoutType);
+    const msg = `Starting ${opt?.label ?? workoutType}. ${opt?.cue ?? ''}`;
+    setAiFeedback(msg);
+    if (voiceEnabled) speak(msg, 0.95, 1.0);
+  } else {
+    await endSession('completed', repCountRef.current);  // ← was endSession('completed')
+    const final = repCountRef.current;
+    const msg   = `Session complete! You did ${final} ${final === 1 ? 'rep' : 'reps'}. Great work!`;
+    setAiFeedback(msg);
+    if (voiceEnabled) speak(msg, 1.0, 1.05);
+    setLogs(prev => [...prev, {
+      exercise: WORKOUT_OPTIONS.find(o => o.id === workoutType)?.label ?? workoutType,
+      reps: final,
+      time: new Date().toLocaleTimeString(),
+    }]);
+  }
+  setIsRecording(r => !r);
+};
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
-  const handleStartStop = () => {
-    if (!isRecording) {
-      resetReps();
-      const opt = WORKOUT_OPTIONS.find(o => o.id === workoutType);
-      const msg = `Starting ${opt?.label ?? workoutType}. ${opt?.cue ?? ''}`;
-      setAiFeedback(msg);
-      if (voiceEnabled) speak(msg, 0.95, 1.0);
-    } else {
-      const final = repCountRef.current;
-      const msg   = `Session complete! You did ${final} ${final === 1 ? 'rep' : 'reps'}. Great work!`;
-      setAiFeedback(msg);
-      if (voiceEnabled) speak(msg, 1.0, 1.05);
-      setLogs(prev => [...prev, {
-        exercise: WORKOUT_OPTIONS.find(o => o.id === workoutType)?.label ?? workoutType,
-        reps: final,
-        time: new Date().toLocaleTimeString(),
-      }]);
-    }
-    setIsRecording(r => !r);
-  };
+const handleCameraToggle = () => {
+  const next = !cameraOn;
+  setCameraOn(next);
+  localStorage.setItem('vitalis_cameraOn', next);
+  if (!next && isRecording) setIsRecording(false);
+  if (voiceEnabled) speak(next ? 'Camera on.' : 'Camera off.');
+};
 
-  const handleCameraToggle = () => {
-    const next = !cameraOn;
-    setCameraOn(next);
-    if (!next && isRecording) setIsRecording(false);
-    if (voiceEnabled) speak(next ? 'Camera on.' : 'Camera off.');
-  };
-
-  const handleVoiceToggle = () => {
-    const next = !voiceEnabled;
-    setVoiceEnabled(next);
-    speak(next ? 'Voice on.' : 'Voice off.');
-  };
-
+const handleVoiceToggle = () => {
+  const next = !voiceEnabled;
+  setVoiceEnabled(next);
+  localStorage.setItem('vitalis_voiceEnabled', next);
+  speak(next ? 'Voice on.' : 'Voice off.');
+};
+ 
   const handleWorkoutChange = (opt) => {
     setWorkoutType(opt.id);
     resetReps();
@@ -441,15 +470,21 @@ const CameraWorkout = () => {
     if (isRecording) setIsRecording(false);
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-row h-screen bg-[#0e0e0e] text-[#e5e2e1] font-['Inter'] overflow-hidden">
 
-      <div className="hidden md:flex md:flex-col md:flex-shrink-0 h-screen sticky top-0">
-        <SidebarAnalytics />
+      {/* FIX: use the same Sidebar as Dashboard, not SidebarAnalytics */}
+      <div className="hidden md:block">
+        <Sidebar
+          expanded={sidebarExpanded}
+          setExpanded={setSidebarExpanded}
+        />
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
+      <div
+        className={`flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden transition-all duration-300
+          ${sidebarExpanded ? 'md:ml-[240px]' : 'md:ml-[72px]'}`}
+      >
         <MobileWorkoutPills workoutType={workoutType} onSelect={handleWorkoutChange} />
         <DesktopWorkoutSelector workoutType={workoutType} onSelect={handleWorkoutChange} />
 
@@ -470,6 +505,7 @@ const CameraWorkout = () => {
               cameraOn={cameraOn}
               isRecording={isRecording}
               poseReady={poseReady}
+              loadError={loadError}
               aiFeedback={aiFeedback}
               isAnalyzing={isAnalyzing}
               repCount={repCount}

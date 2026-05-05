@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../../../config/port";
 import { Sidebar, Topbar, MobileNav } from "../../../components";
 import { useAuth } from "../../../hooks/useAuth";
+import { useNutritionTracker } from "../hooks/useNutritionTracker";
 // ─────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────
@@ -106,13 +107,34 @@ async function apiFetchFoodLogs(userId, limit = 20, offset = 0) {
 
 /** GET /api/nutrition/:userId/:date — fetch daily macro totals */
 async function apiFetchDailySummary(userId) {
-  const today = new Date().toISOString().split("T")[0];
-  const res   = await fetch(`${API_BASE_URL}/api/nutrition/${userId}/${today}`);
-  const data  = await res.json();
-  if (!res.ok) throw new Error(data.error || "Could not fetch summary");
-  return data;
-}
+  const res = await fetch(`${API_BASE_URL}/api/food-logs/${userId}`);
+  const data = await res.json();
 
+  if (!res.ok) throw new Error(data.error || "Could not fetch logs");
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // filter only today's meals
+  const todayMeals = data.records.filter(meal =>
+    meal.logged_at.startsWith(today)
+  );
+
+  // compute totals
+  const summary = todayMeals.reduce((acc, meal) => {
+    acc.total_calories += Number(meal.calories) || 0;
+    acc.total_protein  += Number(meal.protein) || 0;
+    acc.total_carbs    += Number(meal.carbs) || 0;
+    acc.total_fat      += Number(meal.fat) || 0;
+    return acc;
+  }, {
+    total_calories: 0,
+    total_protein: 0,
+    total_carbs: 0,
+    total_fat: 0,
+  });
+
+  return summary;
+}
 // ─────────────────────────────────────────────
 // SMALL UI COMPONENTS
 // ─────────────────────────────────────────────
@@ -635,65 +657,28 @@ const { user, loading } = useAuth();
 const USER_ID = user?.id;
 
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [result,          setResult]          = useState(null);
-  const [isAnalyzing,     setIsAnalyzing]     = useState(false);
-  const [isLogging,       setIsLogging]       = useState(false);
-  const [history,         setHistory]         = useState([]);
-  const [historyLoading,  setHistoryLoading]  = useState(false);
-  const [toast,           setToast]           = useState(null);
-  const [summarySeed,     setSummarySeed]     = useState(0);
+ const {
+  result,
+  isAnalyzing,
+  isLogging,
+  history,
+  historyLoading,
+  toast,
+  summarySeed,
+  handleAnalyze,
+  handleLog,
+} = useNutritionTracker(USER_ID);
 
   useEffect(() => {
     if (!USER_ID) { navigate("/login"); return; }
-    loadHistory();
+   
   }, [USER_ID]);
 
-  const loadHistory = async () => {
-    setHistoryLoading(true);
-    try {
-      const data = await apiFetchFoodLogs(USER_ID);
-      if (data.records) setHistory(data.records);
-    } catch (err) {
-      console.error("Fetch history error:", err);
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
 
-  const showToast = useCallback((msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  }, []);
 
-  const handleAnalyze = async (dataUrl) => {
-    if (!dataUrl) return;
-    setIsAnalyzing(true);
-    setResult(null);
-    try {
-      const data = await apiAnalyzeFoodImage(dataUrl);
-      setResult(data);
-    } catch (err) {
-      console.error("Analysis error:", err);
-      showToast(`❌ ${err.message || "Analysis failed. Try again."}`);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
 
-  const handleLog = async (meal) => {
-    setIsLogging(true);
-    try {
-      await apiSaveFoodLog(USER_ID, meal);
-      showToast(`✓ ${meal.food_name} saved!`);
-      setResult(null);
-      await loadHistory();
-      setSummarySeed((s) => s + 1);
-    } catch (err) {
-      showToast(`❌ ${err.message || "Could not save meal."}`);
-    } finally {
-      setIsLogging(false);
-    }
-  };
+
+
 
   const consumed = history.reduce((sum, m) => sum + (m.calories || 0), 0);
 

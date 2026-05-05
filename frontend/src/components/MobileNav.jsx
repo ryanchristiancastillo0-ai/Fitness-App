@@ -1,14 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Icon from './Icon';
+import { NAV_ITEMS } from '../constant/nav';
 
-const NAV_ITEMS = [
-  { icon: 'dashboard',      label: 'Overview',  path: '/dashboard' },
-  { icon: 'monitor_heart',  label: 'Biometrics', path: '/dashboard/analytics' },
-  { icon: 'analytics',      label: 'Analysis',   path: '/' }, 
-  { icon: 'book',           label: 'Plans',      path: '/dashboard/Plans' },
-  { icon: 'medical_services', label: 'Concierge', path: '/concierge' },
-];
 
 const MobileNav = () => {
   const navigate = useNavigate();
@@ -33,7 +27,7 @@ const MobileNav = () => {
   };
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[68px] bg-[#09090b]/95 backdrop-blur-xl border-t border-white/[0.06] flex justify-around items-center px-2 z-[70] rounded-t-2xl">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[68px] bg-[#09090b]/95 backdrop-blur-xl border-t border-white/[0.06] flex justify-around gap-4 items-center px-2 z-[70] rounded-t-2xl">
       {NAV_ITEMS.map((item) => {
         // ✅ Calculate active state based on current location
         const isActive = location.pathname === item.path;
@@ -52,7 +46,7 @@ const MobileNav = () => {
             }`}>
               <Icon 
                 name={item.icon} 
-                className="text-[22px]" 
+                className="text-[18px]" 
                 fill={isActive ? 1 : 0} 
               />
               
@@ -61,13 +55,6 @@ const MobileNav = () => {
                 <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-[#D1FD52] rounded-full shadow-[0_0_10px_#D1FD52] animate-pulse" />
               )}
             </div>
-
-            {/* Label */}
-            <span className={`text-[9px] font-bold uppercase tracking-[0.1em] transition-opacity duration-300 ${
-              isActive ? 'opacity-100' : 'opacity-60'
-            }`}>
-              {item.label}
-            </span>
 
             {/* Bottom active bar for mobile */}
             {isActive && (

@@ -1,55 +1,67 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-/**
- * usePoseEngine
- *
- * FIX 1: workoutType is no longer in the useEffect dependency array that
- *         initialises MediaPipe. Previously every exercise-switch tore down
- *         and rebuilt the pose engine, losing ~2-3 s of warmup time and
- *         silently dropping frames during the transition.
- *
- * FIX 2: onPoseResult is stored in a ref so the results callback always
- *         calls the *current* version of the function without needing it in
- *         the dependency array (avoids the stale-closure bug that caused the
- *         wrong workoutType to be used for angle detection after switching).
- *
- * @param {object}   params
- * @param {boolean}  params.isRecording
- * @param {boolean}  params.cameraOn
- * @param {React.RefObject} params.webcamRef
- * @param {function} params.onPoseResult   – (landmarks) => void
- * @param {string}   params.workoutType    – kept as param for external use,
- *                                           but NOT used as an effect dep
- * @returns {{ poseReady: boolean }}
- */
+function loadMediaPipe() {
+  return new Promise((resolve, reject) => {
+    // Already loaded
+    if (window.Pose) { resolve(); return; }
+
+    const scripts = [
+      'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js',
+      'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js',
+      'https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js',
+    ];
+
+    let loaded = 0;
+    const onLoad = () => {
+      loaded++;
+      if (loaded === scripts.length) {
+        // Wait a tick for window.Pose to be defined
+        setTimeout(() => {
+          if (window.Pose) resolve();
+          else reject(new Error('window.Pose not found after script load'));
+        }, 300);
+      }
+    };
+
+    scripts.forEach((src) => {
+      // Don't double-inject
+      if (document.querySelector(`script[src="${src}"]`)) { onLoad(); return; }
+      const s = document.createElement('script');
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      s.onload = onLoad;
+      s.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(s);
+    });
+  });
+}
+
 export function usePoseEngine({
   isRecording,
   cameraOn,
   webcamRef,
   onPoseResult,
-  workoutType, // still accepted so callers don't need to change their API
+  workoutType,
 }) {
-  const [poseReady, setPoseReady] = useState(false);
-  const poseRef          = useRef(null);
-  const onPoseResultRef  = useRef(onPoseResult);
-  const workoutTypeRef   = useRef(workoutType);
+  const [poseReady, setPoseReady]     = useState(false);
+  const [loadError, setLoadError]     = useState(false);
+  const poseRef         = useRef(null);
+  const onPoseResultRef = useRef(onPoseResult);
+  const workoutTypeRef  = useRef(workoutType);
+  const noDetectRef     = useRef(0); // frames with no pose
 
-  // Keep refs in sync on every render (no re-init triggered)
   useEffect(() => { onPoseResultRef.current = onPoseResult; }, [onPoseResult]);
   useEffect(() => { workoutTypeRef.current  = workoutType;  }, [workoutType]);
 
-  // ── Init MediaPipe Pose ONCE ────────────────────────────────────────────
-  // workoutType intentionally omitted from deps — we want a single long-lived
-  // instance, not one per exercise.
+  // ── Init MediaPipe once ─────────────────────────────────────────────────
   useEffect(() => {
     let active = true;
 
-    const tryInit = () => {
-      if (!window.Pose) {
-        if (active) setTimeout(tryInit, 500);
-        return;
-      }
+    const init = async () => {
       try {
+        await loadMediaPipe();
+        if (!active) return;
+
         const pose = new window.Pose({
           locateFile: (file) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
@@ -58,53 +70,64 @@ export function usePoseEngine({
         pose.setOptions({
           modelComplexity:        1,
           smoothLandmarks:        true,
-          minDetectionConfidence: 0.6,
-          minTrackingConfidence:  0.6,
+          enableSegmentation:     false,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence:  0.5,
         });
 
-        // Use the ref so we always call the current handler with the current
-        // workoutType — no stale closure, no engine reinit needed.
         pose.onResults((results) => {
-          if (!results.poseLandmarks) return;
-          onPoseResultRef.current(results.poseLandmarks, workoutTypeRef.current);
+          if (!active) return;
+
+          if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
+            // No body detected — increment counter, caller handles it
+            noDetectRef.current += 1;
+            onPoseResultRef.current(null, workoutTypeRef.current, noDetectRef.current);
+            return;
+          }
+
+          noDetectRef.current = 0;
+          onPoseResultRef.current(results.poseLandmarks, workoutTypeRef.current, 0);
         });
+
+        // Warm up the model
+        await pose.initialize();
 
         poseRef.current = pose;
         if (active) setPoseReady(true);
       } catch (err) {
         console.error('[usePoseEngine] init failed:', err);
+        if (active) setLoadError(true);
       }
     };
 
-    tryInit();
+    init();
 
     return () => {
       active = false;
-      poseRef.current?.close();
+      poseRef.current?.close?.();
       poseRef.current = null;
       setPoseReady(false);
     };
-  }, []); // ← empty array: init once, never reinit
+  }, []);
 
-  // ── Frame-analysis loop ─────────────────────────────────────────────────
+  // ── Frame loop ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isRecording || !cameraOn) return;
 
     const sendFrame = async () => {
-      if (!poseRef.current || !webcamRef.current?.video) return;
-      const video = webcamRef.current.video;
-      if (video.readyState >= 2) {
-        try {
-          await poseRef.current.send({ image: video });
-        } catch {
-          /* ignore single-frame errors */
-        }
+      const video = webcamRef.current?.video;
+      if (!poseRef.current || !video) return;
+      if (video.readyState < 2 || video.paused) return;
+      try {
+        await poseRef.current.send({ image: video });
+      } catch {
+        /* ignore single-frame errors */
       }
     };
 
-    const interval = setInterval(sendFrame, 150); // ~7 FPS
-    return () => clearInterval(interval);
+    const id = setInterval(sendFrame, 150); // ~7 FPS
+    return () => clearInterval(id);
   }, [isRecording, cameraOn, webcamRef]);
 
-  return { poseReady };
+  return { poseReady, loadError };
 }

@@ -52,18 +52,18 @@ router.get('/search', async (req, res) => {
 });
 
 // --- NEW: NOTIFICATIONS ROUTE ---
-router.get('/notifications/:userId', async (req, res) => {
-    const { userId } = req.params;
-    try {
-        // Just getting a count for the Topbar badge for now
-        const [notifs] = await db.execute(
-            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
-            [userId]
-        );
-        res.json({ count: notifs[0].count });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
+// router.get('/notifications/:userId', async (req, res) => {
+//     const { userId } = req.params;
+//     try {
+//         // Just getting a count for the Topbar badge for now
+//         const [notifs] = await db.execute(
+//             'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
+//             [userId]
+//         );
+//         res.json({ count: notifs[0].count });
+//     } catch (e) {
+//         res.status(500).json({ error: e.message });
+//     }
+// });
 
 module.exports = router;
