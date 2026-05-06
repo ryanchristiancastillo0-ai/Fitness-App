@@ -16,97 +16,104 @@ function NotificationOverlay({ notifications, onMarkRead, onMarkAllRead, onClose
   const [filter, setFilter] = useState('recent');
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
-
-  const displayed = filter === 'recent'
-    ? notifications.slice(0, 10)
-    : notifications;
+  const displayed = filter === 'recent' ? notifications.slice(0, 10) : notifications;
 
   return (
-    <div className="absolute right-0 top-[calc(100%+10px)] w-[min(360px,90vw)] bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+    <div className="absolute right-0 top-[calc(100%+10px)] w-[min(380px,92vw)] bg-[#181818] border border-white/[0.08] rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] overflow-hidden z-50">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b border-white/[0.06]">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] sm:text-[14px] font-semibold text-[#e5e2e1]">Notifications</span>
+      <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.06] bg-[#1e1e1e]">
+        <div className="flex items-center gap-2.5">
+          <Icon name="notifications" className="text-[#D1FD52] text-[16px]" />
+          
+          <span className="text-[13px] sm:text-[14px] font-bold text-[#e5e2e1] tracking-tight">Notifications</span>
           {unreadCount > 0 && (
-            <span className="text-[9px] sm:text-[10px] font-bold bg-[#D1FD52] text-[#131313] px-1.5 py-0.5 rounded-full">
+            <span className="text-[9px] sm:text-[10px] font-black bg-[#D1FD52] text-[#131313] px-1.5 py-0.5 rounded-full leading-none">
               {unreadCount}
             </span>
           )}
         </div>
-        <button
-          onClick={onMarkAllRead}
-          className="text-[10px] sm:text-[11px] text-[#D1FD52] hover:text-[#D1FD52]/70 transition-colors bg-transparent border-none cursor-pointer whitespace-nowrap"
-        >
-          Mark all read
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onMarkAllRead}
+            className="text-[10px] sm:text-[11px] text-[#D1FD52]/80 hover:text-[#D1FD52] transition-colors bg-transparent border-none cursor-pointer font-medium whitespace-nowrap"
+          >
+            Mark all read
+          </button>
+          {/* ✅ Fixed close button */}
+          <button
+            onClick={onClose}
+            className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.05] hover:bg-white/[0.1] transition-colors border-none cursor-pointer ml-1"
+          >
+             <Icon name="close" className="text-[#888] text-[14px]" />
+          
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex border-b border-white/[0.06]">
+      <div className="flex bg-[#161616] border-b border-white/[0.05]">
         {['recent', 'all'].map(tab => (
           <button
             key={tab}
             onClick={() => setFilter(tab)}
-            className={`flex-1 py-2 text-[11px] sm:text-[12px] font-medium transition-colors border-none cursor-pointer capitalize
+            className={`flex-1 py-2.5 text-[11px] sm:text-[12px] font-semibold transition-all border-none cursor-pointer
               ${filter === tab
-                ? 'bg-[#D1FD52]/10 text-[#D1FD52] border-b-2 border-[#D1FD52]'
-                : 'bg-transparent text-[#555] hover:text-[#888]'
+                ? 'text-[#D1FD52] border-b-2 border-[#D1FD52] bg-[#D1FD52]/[0.05]'
+                : 'text-[#555] hover:text-[#888] bg-transparent'
               }`}
           >
-            {tab === 'recent' ? 'Recent' : `All (${notifications.length})`}
+            {tab === 'recent' ? 'Recent' : `All  (${notifications.length})`}
           </button>
         ))}
       </div>
 
       {/* List */}
-      <div className="max-h-[50vh] sm:max-h-[380px] overflow-y-auto">
+      <div className="max-h-[52vh] sm:max-h-[360px] overflow-y-auto">
         {displayed.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 sm:py-10 gap-2">
-            <span className="material-icons text-[28px] sm:text-[32px] text-[#333]">notifications_none</span>
-            <p className="text-[11px] sm:text-[12px] text-[#555] m-0">No notifications yet</p>
+          <div className="flex flex-col items-center justify-center py-10 gap-3">
+            <span className="material-icons text-[36px] text-[#2a2a2a]">notifications_none</span>
+            <p className="text-[11px] sm:text-[12px] text-[#444] m-0 font-medium">No notifications yet</p>
           </div>
         ) : (
           displayed.map((notif) => (
             <div
               key={notif.id}
               onClick={() => !notif.is_read && onMarkRead(notif.id)}
-              className={`flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/[0.04] transition-colors duration-150
+              className={`flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] transition-all duration-150
                 ${notif.is_read
-                  ? 'opacity-40 bg-black/20 cursor-default'
-                  : 'bg-[#D1FD52]/[0.04] hover:bg-[#D1FD52]/[0.07] cursor-pointer'
+                  ? 'bg-[#141414] cursor-default'
+                  : 'bg-[#D1FD52]/[0.03] hover:bg-[#D1FD52]/[0.06] cursor-pointer'
                 }`}
             >
               {/* Dot */}
               <div className="mt-1.5 shrink-0">
                 {notif.is_read ? (
-                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-transparent border border-white/10" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#2a2a2a] border border-white/10" />
                 ) : (
-                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#D1FD52] animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-[#D1FD52] shadow-[0_0_6px_#D1FD52] animate-pulse" />
                 )}
               </div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
-                <p className={`text-[11px] sm:text-[12px] leading-relaxed m-0 break-words
-                  ${notif.is_read ? 'text-[#444] line-through decoration-white/10' : 'text-[#e5e2e1]'}`}>
+                <p className={`text-[11px] sm:text-[12px] leading-relaxed m-0 break-words font-medium
+                  ${notif.is_read ? 'text-[#555]' : 'text-[#ddd]'}`}>
                   {notif.message}
                 </p>
-                <p className="text-[9px] sm:text-[10px] text-[#444] mt-0.5 m-0">
+                <p className={`text-[9px] sm:text-[10px] mt-1 m-0 font-medium
+                  ${notif.is_read ? 'text-[#333]' : 'text-[#555]'}`}>
                   {new Date(notif.created_at).toLocaleString()}
                 </p>
               </div>
 
-              {/* Unread badge */}
-              {!notif.is_read && (
-                <span className="shrink-0 mt-1 text-[9px] sm:text-[10px] font-bold bg-[#D1FD52]/20 text-[#D1FD52] px-1.5 py-0.5 rounded-full whitespace-nowrap">
+              {/* Badge */}
+              {!notif.is_read ? (
+                <span className="shrink-0 mt-1 text-[9px] font-black bg-[#D1FD52]/20 text-[#D1FD52] px-1.5 py-0.5 rounded-full whitespace-nowrap border border-[#D1FD52]/20">
                   NEW
                 </span>
-              )}
-
-              {/* Read overlay indicator */}
-              {notif.is_read && (
-                <span className="shrink-0 mt-1 text-[9px] sm:text-[10px] text-[#333] whitespace-nowrap">
+              ) : (
+                <span className="shrink-0 mt-1 text-[9px] font-medium text-[#333] whitespace-nowrap">
                   read
                 </span>
               )}
@@ -116,16 +123,16 @@ function NotificationOverlay({ notifications, onMarkRead, onMarkAllRead, onClose
       </div>
 
       {/* Footer */}
-      <div className="px-3 sm:px-4 py-2 sm:py-2.5 border-t border-white/[0.06] flex items-center justify-between">
-        <span className="text-[10px] sm:text-[11px] text-[#444]">
-          {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+      <div className="px-4 py-2.5 border-t border-white/[0.05] bg-[#161616] flex items-center justify-between">
+        <span className="text-[10px] sm:text-[11px] font-medium text-[#444]">
+          {unreadCount > 0
+            ? <span className="text-[#D1FD52]/70">{unreadCount} unread</span>
+            : <span className="text-[#3a3a3a]">All caught up ✓</span>
+          }
         </span>
-        <button
-          onClick={onClose}
-          className="text-[10px] sm:text-[11px] text-[#555] hover:text-[#888] transition-colors bg-transparent border-none cursor-pointer"
-        >
-          Close
-        </button>
+        <span className="text-[10px] text-[#333]">
+          {notifications.length} total
+        </span>
       </div>
     </div>
   );
@@ -133,7 +140,8 @@ function NotificationOverlay({ notifications, onMarkRead, onMarkAllRead, onClose
 
 // ── Topbar ───────────────────────────────────────────────────────────────────
 const Topbar = ({ sidebarExpanded, userId }) => {
-    console.log('TOPBAR USERID:', userId); // ← add this
+  
+
   const navigate = useNavigate();
   const { addToast } = useNotification();
   const { logout } = useAuth();
@@ -158,19 +166,18 @@ const Topbar = ({ sidebarExpanded, userId }) => {
     navigate(path);
   };
 
-const fetchNotifications = useCallback(async () => {
-  if (!userId) return;
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/notifications/${userId}`, { credentials: 'include' });
-    const data = await res.json();
-    console.log('NOTIF RESPONSE:', data);           // ← add this
-    console.log('NOTIFICATIONS ARRAY:', data.notifications); // ← add this
-    setNotifCount(data.count || 0);
-    setNotifications(data.notifications || []);
-  } catch (err) {
-    console.error('Notif fetch error:', err);
-  }
-}, [userId]);
+  const fetchNotifications = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/notifications/${userId}`, { credentials: 'include' });
+      const data = await res.json();
+      setNotifCount(data.count || 0);
+      setNotifications(data.notifications || []);
+    } catch (err) {
+      console.error('Notif fetch error:', err);
+    }
+  }, [userId]);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -278,11 +285,11 @@ const fetchNotifications = useCallback(async () => {
       <header
         className={
           'fixed top-0 right-0 h-[56px] sm:h-[60px] z-50 ' +
-          'bg-[#121212]/80 backdrop-blur-xl ' +
+          'bg-[#121212]/90 backdrop-blur-xl ' +
           'border-b border-white/[0.06] ' +
           'flex items-center justify-between px-3 sm:px-4 md:px-6 ' +
           'transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] ' +
-          'left-0 ' + (sidebarExpanded ? 'md:left-60' : 'md:left-[72px]')
+          'left-0 ' + (sidebarExpanded ? 'md:left-64' : 'md:left-[72px]')
         }
       >
         {/* ── Left ── */}
@@ -303,7 +310,7 @@ const fetchNotifications = useCallback(async () => {
                 onClick={() => handleNavClick(item.path)}
                 className={
                   'font-[Manrope] text-[13px] transition-colors duration-200 border-none bg-transparent cursor-pointer ' +
-                  (activePath === item.path ? 'text-[#D1FD52] font-bold' : 'text-[#666] hover:text-[#D1FD52]')
+                  (activePath === item.path ? 'text-[#D1FD52] font-bold' : 'text-[#555] hover:text-[#D1FD52]')
                 }
               >
                 {item.name}
@@ -313,21 +320,22 @@ const fetchNotifications = useCallback(async () => {
         </div>
 
         {/* ── Right ── */}
-        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-4">
-          <div className="relative hidden sm:flex items-center gap-2 bg-white/[0.05] border border-white/[0.06] rounded-full px-3 sm:px-3.5 py-1.5 focus-within:border-[#D1FD52]/50 transition-all">
-            <Icon name="search" className="text-[#555] text-[14px] sm:text-[16px]" />
+        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
+          {/* Search */}
+          <div className="relative hidden sm:flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] rounded-full px-3 sm:px-3.5 py-1.5 focus-within:border-[#D1FD52]/40 focus-within:bg-white/[0.06] transition-all">
+            <Icon name="search" className="text-[#444] text-[14px] sm:text-[15px]" />
             <input
               placeholder="Search stats..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent border-none outline-none text-[#e5e2e1] text-[11px] sm:text-[12px] w-14 sm:w-16 lg:w-36 placeholder-[#555]"
+              className="bg-transparent border-none outline-none text-[#e5e2e1] text-[11px] sm:text-[12px] w-14 sm:w-16 lg:w-36 placeholder-[#444]"
             />
           </div>
 
-          {/* ── Notification Bell + Overlay ── */}
+          {/* ── Notification Bell ── */}
           <div className="relative" ref={notifRef}>
-            <div
-              className="relative p-1 cursor-pointer group"
+            <button
+              className="relative p-2 rounded-xl cursor-pointer group bg-transparent border-none transition-all duration-200 hover:bg-white/[0.05]"
               onClick={() => {
                 setNotifOpen(prev => !prev);
                 fetchNotifications();
@@ -335,12 +343,12 @@ const fetchNotifications = useCallback(async () => {
             >
               <Icon
                 name="notifications"
-                className={`text-[20px] sm:text-[22px] transition-colors ${notifOpen ? 'text-[#D1FD52]' : 'text-[#666] group-hover:text-[#D1FD52]'}`}
+                className={`text-[20px] sm:text-[21px] transition-colors ${notifOpen ? 'text-[#D1FD52]' : 'text-[#555] group-hover:text-[#D1FD52]'}`}
               />
               {notifCount > 0 && (
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#D1FD52] rounded-full border-2 border-[#121212] animate-pulse" />
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-[#D1FD52] rounded-full border-[1.5px] border-[#121212] animate-pulse shadow-[0_0_6px_#D1FD52]" />
               )}
-            </div>
+            </button>
 
             {notifOpen && (
               <NotificationOverlay
@@ -357,22 +365,22 @@ const fetchNotifications = useCallback(async () => {
             <button
               onClick={() => setSettingsOpen((prev) => !prev)}
               className={
-                'p-1.5 rounded-lg transition-all duration-200 cursor-pointer ' +
-                (settingsOpen ? 'bg-[#D1FD52] text-[#131313]' : 'text-[#666] hover:text-[#D1FD52] hover:bg-white/5')
+                'p-2 rounded-xl transition-all duration-200 cursor-pointer border-none ' +
+                (settingsOpen ? 'bg-[#D1FD52] text-[#131313]' : 'text-[#555] hover:text-[#D1FD52] hover:bg-white/[0.05] bg-transparent')
               }
             >
-              <Icon name="settings" className="text-[20px] sm:text-[22px]" />
+              <Icon name="settings" className="text-[20px] sm:text-[21px]" />
             </button>
 
             {settingsOpen && (
-              <div className="absolute right-0 top-[calc(100%+10px)] w-[200px] sm:w-[220px] bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-                <div className="flex items-center gap-3 px-3 sm:px-4 py-3 border-b border-white/[0.06]">
+              <div className="absolute right-0 top-[calc(100%+10px)] w-[210px] sm:w-[220px] bg-[#181818] border border-white/[0.08] rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] overflow-hidden z-50">
+                <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.06] bg-[#1e1e1e]">
                   <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden border border-[#D1FD52]/20 bg-[#222] shrink-0">
                     <img src={avatarSrc} alt="User" className="w-full h-full object-cover" onError={handleAvatarError} />
                   </div>
                   <div>
-                    <p className="text-[12px] sm:text-[13px] font-semibold text-[#e5e2e1] leading-tight m-0">{userData.name}</p>
-                    <p className="text-[9px] sm:text-[10px] text-[#555] m-0">Pro Member</p>
+                    <p className="text-[12px] sm:text-[13px] font-bold text-[#e5e2e1] leading-tight m-0">{userData.name}</p>
+                    <p className="text-[9px] sm:text-[10px] text-[#D1FD52]/50 m-0 font-medium">Pro Member</p>
                   </div>
                 </div>
                 <div className="p-1.5 flex flex-col gap-0.5">
@@ -380,15 +388,15 @@ const fetchNotifications = useCallback(async () => {
                     <button
                       key={label}
                       onClick={() => { action(); setSettingsOpen(false); }}
-                      className={'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[11px] sm:text-[12px] transition-colors duration-150 text-left cursor-pointer border-none bg-transparent ' + (accent ? 'text-[#D1FD52] hover:bg-[#D1FD52]/10' : 'text-[#888] hover:text-[#e5e2e1] hover:bg-white/5')}
+                      className={'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[11px] sm:text-[12px] transition-colors duration-150 text-left cursor-pointer border-none bg-transparent ' + (accent ? 'text-[#D1FD52] hover:bg-[#D1FD52]/10' : 'text-[#666] hover:text-[#e5e2e1] hover:bg-white/[0.05]')}
                     >
-                      <Icon name={icon} className="text-[14px] sm:text-[16px]" />
+                      <Icon name={icon} className="text-[14px] sm:text-[15px]" />
                       {label}
                     </button>
                   ))}
                   <div className="border-t border-white/[0.06] mt-1 pt-1">
                     <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[11px] sm:text-[12px] text-[#e05050] hover:bg-[#e05050]/10 transition-colors duration-150 cursor-pointer border-none bg-transparent">
-                      <Icon name="logout" className="text-[14px] sm:text-[16px]" /> Log out
+                      <Icon name="logout" className="text-[14px] sm:text-[15px]" /> Log out
                     </button>
                   </div>
                 </div>
@@ -396,15 +404,16 @@ const fetchNotifications = useCallback(async () => {
             )}
           </div>
 
+          {/* ── Avatar ── */}
           <div
-            className="flex items-center gap-2 sm:gap-3 ml-1 pl-2 border-l border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => navigate('/profile')}
+            className="flex items-center gap-2 sm:gap-2.5 ml-1 pl-2.5 border-l border-white/[0.08] cursor-pointer hover:opacity-75 transition-opacity"
+            onClick={() => navigate('/dashboard/profile')}
           >
             <div className="hidden lg:flex flex-col items-end">
-              <span className="text-[11px] sm:text-[12px] font-medium text-[#e5e2e1]">{userData.name}</span>
-              <span className="text-[9px] sm:text-[10px] text-[#555]">Pro Member</span>
+              <span className="text-[11px] sm:text-[12px] font-semibold text-[#ccc]">{userData.name}</span>
+              <span className="text-[9px] sm:text-[10px] text-[#D1FD52]/40 font-medium">Pro Member</span>
             </div>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border border-[#D1FD52]/20 bg-[#222] shrink-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border border-[#D1FD52]/20 bg-[#222] shrink-0 ring-1 ring-white/5">
               <img src={avatarSrc} alt="User" className="w-full h-full object-cover" onError={handleAvatarError} />
             </div>
           </div>
@@ -413,37 +422,37 @@ const fetchNotifications = useCallback(async () => {
 
       {/* ── Mobile Navigation Drawer ── */}
       <div
-        className={`fixed inset-0 z-[45] bg-black/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 z-[45] bg-black/70 backdrop-blur-sm transition-opacity duration-300 md:hidden ${mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={() => setMobileMenuOpen(false)}
       />
       <div
-        className={`fixed top-[56px] sm:top-[60px] left-0 w-60 sm:w-64 h-full bg-[#121212] border-r border-white/10 z-[46] transform transition-transform duration-300 ease-in-out md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed top-[56px] sm:top-[60px] left-0 w-60 sm:w-64 h-full bg-[#121212] border-r border-white/[0.07] z-[46] transform transition-transform duration-300 ease-in-out md:hidden ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        <nav className="flex flex-col p-3 sm:p-4 gap-1.5 sm:gap-2">
+        <nav className="flex flex-col p-3 sm:p-4 gap-1 sm:gap-1.5">
           {NAV_LINKS.map((item, i) => (
             <button
               key={i}
               onClick={() => handleNavClick(item.path)}
-              className={`flex items-center px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg text-[13px] sm:text-[14px] font-medium transition-colors border-none bg-transparent text-left cursor-pointer ${activePath === item.path ? 'bg-[#D1FD52]/10 text-[#D1FD52]' : 'text-[#888]'}`}
+              className={`flex items-center px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl text-[13px] sm:text-[14px] font-medium transition-colors border-none bg-transparent text-left cursor-pointer ${activePath === item.path ? 'bg-[#D1FD52]/10 text-[#D1FD52]' : 'text-[#666] hover:text-[#e5e2e1] hover:bg-white/[0.04]'}`}
             >
               {item.name}
             </button>
           ))}
-          <div className="h-[1px] bg-white/10 my-1.5 sm:my-2" />
+          <div className="h-px bg-white/[0.06] my-2" />
           {SETTINGS_ITEMS.map(({ icon, label, action }) => (
             <button
               key={label}
               onClick={() => { action(); setMobileMenuOpen(false); }}
-              className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-[#888] text-[13px] sm:text-[14px] border-none bg-transparent cursor-pointer"
+              className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-[#555] hover:text-[#e5e2e1] text-[13px] sm:text-[14px] border-none bg-transparent cursor-pointer rounded-xl hover:bg-white/[0.04] transition-colors"
             >
-              <Icon name={icon} className="text-[16px] sm:text-[18px]" /> {label}
+              <Icon name={icon} className="text-[16px] sm:text-[17px]" /> {label}
             </button>
           ))}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-[#e05050] text-[13px] sm:text-[14px] border-none bg-transparent cursor-pointer"
+            className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-[#e05050] text-[13px] sm:text-[14px] border-none bg-transparent cursor-pointer rounded-xl hover:bg-[#e05050]/10 transition-colors"
           >
-            <Icon name="logout" className="text-[16px] sm:text-[18px]" /> Logout
+            <Icon name="logout" className="text-[16px] sm:text-[17px]" /> Logout
           </button>
         </nav>
       </div>

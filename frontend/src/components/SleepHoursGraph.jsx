@@ -322,12 +322,15 @@ export const SleepHoursGraph = ({ userId = null }) => {
               />
               {points.length <= 10 &&
                 points.map((pt, i) => {
-                  const step = points.length > 1 ? 1000 / (points.length - 1) : 500;
+                  const W = 1000;
+                  const step = points.length > 1 ? W / (points.length - 1) : W / 2;
+                  const x = points.length === 1 ? W / 2 : i * step;
+                  const y = 200 - (Math.min(Number(pt.value), metaObj.max) / metaObj.max) * 200;
                   return (
                     <circle
                       key={i}
-                      cx={i * step}
-                      cy={200 - (Math.min(Number(pt.value), metaObj.max) / metaObj.max) * 200}
+                      cx={x}
+                      cy={y}
                       r="5"
                       fill={accentColor}
                       fillOpacity="0.9"

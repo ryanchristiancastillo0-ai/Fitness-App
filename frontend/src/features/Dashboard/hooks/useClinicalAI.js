@@ -43,6 +43,28 @@ export const useClinicalAI = (USER_ID, setInsights) => {
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }));
         setInsights(formattedInsights);
+
+        // ✅ Build a single combined summary from both insights
+        const restInsight      = result.insights.find(i => i.category === 'Rest Advisory');
+        const performInsight   = result.insights.find(i => i.category === 'Performance Tip');
+
+        const restMsg    = restInsight?.message    || '';
+        const performMsg = performInsight?.message || '';
+
+        const combinedMessage = [restMsg, performMsg].filter(Boolean).join(' ');
+
+        if (combinedMessage && USER_ID) {
+          await fetch(`${API_BASE_URL}/api/notifications`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              user_id: USER_ID,
+              message: combinedMessage,
+              type:    'info',
+            }),
+          });
+        }
       }
     } catch (err) {
       console.error('Clinical Engine Error:', err);

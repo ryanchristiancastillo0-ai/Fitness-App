@@ -343,4 +343,115 @@ router.get('/logs/latest/:userId', async (req, res) => {
     }
 });
 
+
+
+// --- AI RUN ANALYSIS ---
+router.post('/ai/run-analysis', async (req, res) => {
+    const { userId, run } = req.body;
+
+    try {
+        // 1. Fetch user profile
+        const [userRows] = await db.execute(
+            'SELECT name, fitness_goal FROM users WHERE id = ? LIMIT 1',
+            [userId]
+        );
+        const user = userRows[0] || { name: 'Athlete', fitness_goal: 'general fitness' };
+        const firstName = user.name ? user.name.split(' ')[0] : 'Athlete';
+
+        // 2. Fetch last 7 runs for trend/predictive analysis
+        const [runHistory] = await db.execute(
+            `SELECT distance, duration, pace, calories, created_at
+             FROM activity_logs
+             WHERE user_id = ?
+             ORDER BY created_at DESC
+             LIMIT 7`,
+            [userId]
+        );
+
+        const totalRuns     = runHistory.length;
+        const avgDistance   = totalRuns > 0 ? (runHistory.reduce((s, r) => s + parseFloat(r.distance || 0), 0) / totalRuns).toFixed(2) : 0;
+        const avgCalories   = totalRuns > 0 ? Math.round(runHistory.reduce((s, r) => s + (r.calories || 0), 0) / totalRuns) : 0;
+        const isImproving   = totalRuns >= 2 && parseFloat(runHistory[0]?.distance || 0) > parseFloat(runHistory[1]?.distance || 0);
+        const consistency   = totalRuns >= 5 ? 'very consistent' : totalRuns >= 3 ? 'building consistency' : 'just getting started';
+
+        const prompt = `
+You are Vitalis AI, a warm, friendly, and encouraging running coach embedded in a fitness app.
+Your job is to give ${firstName} a personalized post-run analysis with a friendly tone — like a supportive coach who's genuinely proud of them.
+
+RUNNER PROFILE:
+- Name: ${firstName}
+- Fitness Goal: ${user.fitness_goal || 'general fitness'}
+- Consistency Level: ${consistency} (${totalRuns} runs logged)
+
+THIS RUN:
+- Distance:  ${run.distance} km
+- Duration:  ${run.duration} (hh:mm:ss)
+- Pace:      ${run.pace} /km
+- Calories:  ${run.calories} kcal
+- Splits:    ${run.splits?.length > 0 ? run.splits.map(s => `KM ${s.km}: ${s.pace}`).join(', ') : 'No splits recorded'}
+
+HISTORICAL AVERAGES (last ${totalRuns} runs):
+- Avg Distance: ${avgDistance} km
+- Avg Calories: ${avgCalories} kcal
+- Trend: ${isImproving ? 'distance is increasing 📈' : 'distance is steady or declining'}
+
+INSTRUCTIONS:
+1. Start with a warm, genuine reaction to this specific run — reference their exact numbers.
+2. For summary: 2-3 sentences covering what they did well and one thing to watch.
+3. For prediction: based on their history and consistency, predict what they could realistically achieve in 30 days if they keep it up. Be specific (e.g., "you could hit 5km runs" or "shave 30 seconds off your pace"). Make it exciting but realistic.
+4. For tip: one specific, actionable tip for their next run based on their pace and splits.
+5. Tone: warm, friendly, like a coach who genuinely cares — not robotic. Use their name naturally.
+6. NEVER say "great job" or "keep it up" as opening words.
+
+RESPONSE FORMAT (strict JSON only, no markdown, no extra text):
+{
+  "summary": "...",
+  "prediction": "...",
+  "tip": "...",
+  "emoji_verdict": "🔥|💪|⚡|🏃|✨"
+}`.trim();
+
+        const raw = await callGeminiWithFallback(prompt);
+
+        if (!raw || typeof raw !== 'string') {
+            throw new Error("Invalid response from AI");
+        }
+
+        const cleaned  = raw.replace(/```json|```/gi, '').trim();
+        const aiResult = JSON.parse(cleaned);
+
+        // 3. Send notification
+        try {
+            await db.execute(
+                'INSERT INTO notifications (user_id, message, type) VALUES (?, ?, ?)',
+                [
+                    userId,
+                    `${aiResult.emoji_verdict} Run Analysis: ${aiResult.summary}`,
+                    'info'
+                ]
+            );
+        } catch (notifErr) {
+            console.error('Notification insert failed:', notifErr.message);
+        }
+
+        res.json({
+            firstName,
+            summary:       aiResult.summary,
+            prediction:    aiResult.prediction,
+            tip:           aiResult.tip,
+            emoji_verdict: aiResult.emoji_verdict,
+            stats: {
+                distance:  run.distance,
+                duration:  run.duration,
+                pace:      run.pace,
+                calories:  run.calories,
+            }
+        });
+
+    } catch (err) {
+        console.error('Run Analysis Error:', err);
+        res.status(500).json({ error: 'Run analysis failed' });
+    }
+});
+
 module.exports = router;

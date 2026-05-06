@@ -2,10 +2,17 @@ import { useState, useEffect } from "react";
 import Icon from "./Icon";
 import { useNavigate, useLocation } from "react-router-dom";
 import { navList } from "../constant/nav";
-export default function SidebarAnalytics() {
+export default function SidebarAnalytics({ onExpandChange }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const navigate = useNavigate();
   const location = useLocation(); // ✅ Hook into the actual URL path
+ 
+
+  const toggle = (val) => {
+    setIsExpanded(val);
+    onExpandChange?.(val); // notify parent
+  };
+
 
 
 
@@ -21,8 +28,8 @@ export default function SidebarAnalytics() {
 
   return (
     <aside
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
+ onMouseEnter={() => toggle(true)}
+onMouseLeave={() => toggle(false)}
       className={`hidden md:flex flex-col py-8 border-r border-white/5 bg-[#09090b] transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] sticky top-0 h-screen z-[100] ${
         isExpanded ? "w-64" : "w-20"
       }`}

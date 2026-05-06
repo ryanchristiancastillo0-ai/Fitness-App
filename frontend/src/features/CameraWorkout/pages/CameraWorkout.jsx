@@ -1,13 +1,14 @@
 import { useState, useRef } from 'react';
 import Webcam from 'react-webcam';
 import { Icon } from '../../../components';
-import { Sidebar } from '../../../components';
+import { SidebarAnalytics} from '../../../components';
 
 import { WORKOUT_OPTIONS } from '../constants/workout';
 import { useRepCounter, speak } from '../hooks/useRepCounter';
 import { useAICoach }           from '../hooks/useAICoach';
 import { usePoseEngine }        from '../hooks/usePoseEngine';
 import { useWorkoutSession } from '../hooks/useWorkoutSession';
+import { API_BASE_URL } from '../../../config/port';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Sub-components (unchanged)
@@ -423,25 +424,45 @@ const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('vit
       });
     },
   });
-const handleStartStop = async () => {
+
+  const handleStartStop = async () => {
   if (!isRecording) {
-    await startSession(workoutType);        // ← was startSession()
+    await startSession(workoutType);
     resetReps();
     const opt = WORKOUT_OPTIONS.find(o => o.id === workoutType);
     const msg = `Starting ${opt?.label ?? workoutType}. ${opt?.cue ?? ''}`;
     setAiFeedback(msg);
     if (voiceEnabled) speak(msg, 0.95, 1.0);
   } else {
-    await endSession('completed', repCountRef.current);  // ← was endSession('completed')
+    await endSession('completed', repCountRef.current);
     const final = repCountRef.current;
+    const opt   = WORKOUT_OPTIONS.find(o => o.id === workoutType);
     const msg   = `Session complete! You did ${final} ${final === 1 ? 'rep' : 'reps'}. Great work!`;
     setAiFeedback(msg);
     if (voiceEnabled) speak(msg, 1.0, 1.05);
     setLogs(prev => [...prev, {
-      exercise: WORKOUT_OPTIONS.find(o => o.id === workoutType)?.label ?? workoutType,
+      exercise: opt?.label ?? workoutType,
       reps: final,
       time: new Date().toLocaleTimeString(),
     }]);
+
+    // ✅ Send notification on session end
+    if (user?.id) {
+      try {
+        await fetch(`${API_BASE_URL}/api/notifications`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            user_id: user.id,
+            message: `Workout complete! You finished ${opt?.label ?? workoutType} with ${final} ${final === 1 ? 'rep' : 'reps'}.`,
+            type: 'info',
+          }),
+        });
+      } catch (err) {
+        console.error('Notification failed:', err);
+      }
+    }
   }
   setIsRecording(r => !r);
 };
@@ -475,7 +496,7 @@ const handleVoiceToggle = () => {
 
       {/* FIX: use the same Sidebar as Dashboard, not SidebarAnalytics */}
       <div className="hidden md:block">
-        <Sidebar
+        <SidebarAnalytics
           expanded={sidebarExpanded}
           setExpanded={setSidebarExpanded}
         />

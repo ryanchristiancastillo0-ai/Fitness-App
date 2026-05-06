@@ -20,9 +20,9 @@ import NutritionTracker from "./features/MealTracker/pages/MealTreacker";
 import BMI from "./pages/BMI";
 
 import VirtualClinic from "./features/Coach/pages/virtual-clinic";
-import ActivityMap from "./pages/ActivityMap";
 import Profile from "./features/Profile/pages/Profile";
 import {  NotificationProvider } from './context/NotificationSystem';
+import ActivityMap from "./features/ActivityMap/pages/ActivityMap";
 
 export default function App() {
   return (
