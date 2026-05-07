@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import Icon from '../components/Icon';
 
 // ── Context ──────────────────────────────────────────────────────────────
 const NotificationContext = createContext(null);
@@ -40,7 +41,7 @@ function Toast({ id, message, type, onClose }) {
       `}
     >
       <span className="material-icons text-[18px] mt-0.5 shrink-0">
-        {ICONS[type]}
+         <Icon name={'check_circle'} className={'text-[16px]'}/>
       </span>
       <p className="text-[12px] text-[#e5e2e1] leading-relaxed flex-1 m-0">
         {message}
@@ -49,7 +50,7 @@ function Toast({ id, message, type, onClose }) {
         onClick={handleClose}
         className="text-[#555] hover:text-[#e5e2e1] transition-colors bg-transparent border-none cursor-pointer p-0 leading-none"
       >
-        <span className="material-icons text-[16px]">close</span>
+       <Icon name={'close'} className={'text-[16px]'}/>
       </button>
     </div>
   );

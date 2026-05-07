@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sidebar, Topbar, MobileNav, Icon } from '../components';
-import { API_BASE_URL } from '../config/port';
-import { useAuth } from '../hooks/useAuth';
+import { Sidebar, Topbar, MobileNav, Icon } from '../../../components';
+import { API_BASE_URL } from '../../../config/port';
+import { useAuth } from '../../../hooks/useAuth';
 const BMI = () => {
   const navigate = useNavigate();
   const [sidebarExpanded, setSidebarExpanded] = useState(false);

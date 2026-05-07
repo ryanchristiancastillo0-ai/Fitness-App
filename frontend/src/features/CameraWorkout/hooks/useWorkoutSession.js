@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
+import { API_BASE_URL } from '../../../config/port';
 
-const API_BASE = '/api/workout-logs';
+const API_BASE = `${API_BASE_URL}/api/workout-logs`; // ✅ hits your actual backend
 
 export function useWorkoutSession() {
   const [sessionId,     setSessionId]     = useState(null);
@@ -35,6 +36,7 @@ export function useWorkoutSession() {
     } catch (err) {
       console.error('[useWorkoutSession] startSession failed:', err.message);
       setSessionError(err.message);
+      // Don't rethrow — caller is fire-and-forget
     }
   }, []);
 
@@ -66,6 +68,7 @@ export function useWorkoutSession() {
     } catch (err) {
       console.error('[useWorkoutSession] endSession failed:', err.message);
       setSessionError(err.message);
+      // Don't rethrow — caller is fire-and-forget
     } finally {
       sessionIdRef.current = null;
       setSessionId(null);

@@ -1,28 +1,25 @@
 import { Route, Routes, Navigate } from "react-router-dom";
-
-import Login from "./pages/Login";
-import Register from "./pages/Register";
 import Dashboard from "./features/Dashboard/pages/Dashboard";
-import ClinicalMessenger from "./pages/Social";
 import Plans from "./features/Plan/pages/Plans";
 import Analytics from "./features/Analytics/pages/Analytics";
-import Offline from "./pages/Offline";
 import CameraWorkout from "./features/CameraWorkout/pages/CameraWorkout";
-import Jogging from "./pages/Jogging";
-import Log from "./pages/Log";
-import Records from "./pages/Record";
+import Log from "./features/Log/pages/Log";
 
 // Middleware
 import { ProtectedRoute, PublicRoute } from "./hooks/useMiddleware";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import NutritionTracker from "./features/MealTracker/pages/MealTreacker";
 
-import BMI from "./pages/BMI";
+import BMI from "./features/BMI/pages/BMI";
 
 import VirtualClinic from "./features/Coach/pages/virtual-clinic";
 import Profile from "./features/Profile/pages/Profile";
 import {  NotificationProvider } from './context/NotificationSystem';
 import ActivityMap from "./features/ActivityMap/pages/ActivityMap";
+import Register from "./features/Auth/Register/pages/Register";
+import Login from "./features/Auth/Login/pages/Login";
+import ClinicalMessenger from "./features/Social/pages/Social";
+import ForgotPassword from './features/Auth/Forgot-password/pages/ForgotPassword';
 
 export default function App() {
   return (
@@ -117,14 +114,7 @@ function RoutesHandler() {
         }
       />
 
-      <Route
-        path="/dashboard/offline"
-        element={
-          <ProtectedRoute>
-            <Offline />
-          </ProtectedRoute>
-        }
-      />
+  
 
       <Route
         path="/dashboard/workouts"
@@ -135,23 +125,9 @@ function RoutesHandler() {
         }
       />
 
-      <Route
-        path="/dashboard/jogging"
-        element={
-          <ProtectedRoute>
-            <Jogging />
-          </ProtectedRoute>
-        }
-      />
+  
 
-      <Route
-        path="/dashboard/records"
-        element={
-          <ProtectedRoute>
-            <Records />
-          </ProtectedRoute>
-        }
-      />
+  
 
       <Route
         path="/dashboard/profile"
@@ -177,6 +153,16 @@ function RoutesHandler() {
           <ProtectedRoute>
             <NutritionTracker/>
           </ProtectedRoute>
+        }
+      />
+
+      
+      <Route
+        path="/reset-password"
+        element={
+         
+            <ForgotPassword/>
+    
         }
       />
 

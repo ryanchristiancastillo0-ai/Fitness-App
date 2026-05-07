@@ -1,92 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useGoogleLogin } from '@react-oauth/google';
-import { API_BASE_URL } from '../config/port';
-import { useAuth } from '../hooks/useAuth';
+import { useLogin } from '../hooks/useLogin';
 
 const Login = () => {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
   const [focused,  setFocused]  = useState('');
-  const navigate = useNavigate();
-  const { setUser } = useAuth();
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setLoading(true);
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Login failed');
-    }
-
-    // ✅ FIX: define userId properly
-    const userId = data?.id || data?.user?.id;
-    if (!userId) throw new Error('Login response did not include a user ID.');
-
-    setUser(data);
-
-    // 🔥 SECURITY LOG (correct placement)
-   
-
-    navigate('/dashboard');
-  } catch (err) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const handleGoogleSuccess = async (codeResponse) => {
-    setError('');
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/google-login`, {
-        method:  'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: codeResponse.code })
-      });
-
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Server response was not JSON. Check backend console.");
-      }
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Google synchronization failed.');
-
-      // ✅ Same normalization for Google login
-      const userId = data?.id || data?.user?.id;
-      if (!userId) throw new Error('Google login response did not include a user ID.');
-
-      setUser(data);
-      navigate('/dashboard');
-    } catch (err) {
-      console.error("Google Login Error:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loginWithGoogle = useGoogleLogin({
-    onSuccess: handleGoogleSuccess,
-    onError:   () => setError('Google Authentication Interrupted.'),
-    flow: 'auth-code'
-  });
+  const { error, loading, handleSubmit, loginWithGoogle } = useLogin();
 
   return (
     <div className="relative min-h-screen w-full bg-[#0e0e0e] font-['DM_Sans'] text-[#e5e2e1] overflow-hidden flex items-center justify-center">
@@ -96,7 +16,7 @@ const handleSubmit = async (e) => {
       <div className="vitalis-grid fixed inset-0 z-[2]" />
 
       <div className="relative z-10 grid w-full min-h-screen lg:grid-cols-[1fr_480px]">
-        
+
         {/* Left Hero Panel */}
         <div className="hidden lg:flex flex-col justify-center p-14 gap-4">
           <span className="text-[11px] font-semibold tracking-[0.35em] uppercase text-[#c7f248] opacity-80">
@@ -111,7 +31,7 @@ const handleSubmit = async (e) => {
           <p className="text-[13px] text-[#e5e2e1]/45 max-w-[320px] leading-relaxed font-light mt-1">
             AI-powered biometric tracking that adapts to your body in real time. Every rep, every rest, optimized.
           </p>
-          
+
           <div className="flex gap-8 mt-6 pt-6 border-t border-white/10">
             <div className="flex flex-col">
               <span className="font-['Bebas_Neue'] text-3xl text-[#c7f248] leading-none">12K+</span>
@@ -127,7 +47,7 @@ const handleSubmit = async (e) => {
         {/* Right Glass Panel */}
         <div className="flex items-center justify-center p-8">
           <div className="vitalis-card-animate relative w-full max-w-[400px] bg-[#121210]/65 backdrop-blur-[32px] saturate-[140%] border border-[#c7f248]/10 rounded-[20px] p-10 shadow-[0_32px_80px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)]">
-            
+
             <div className="vitalis-scan-bar" />
 
             {/* Logo */}
@@ -143,7 +63,7 @@ const handleSubmit = async (e) => {
             <h2 className="font-['Bebas_Neue'] text-[32px] tracking-wider leading-none mb-1.5">ACCESS PORTAL</h2>
             <p className="text-xs text-[#c4c9b0]/55 tracking-wide mb-8">Enter credentials to synchronize biometrics.</p>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={(e) => handleSubmit(e, { email, password })} className="space-y-5">
               {error && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-[10px] font-semibold tracking-widest uppercase p-2.5 text-center">
                   {error}
@@ -185,13 +105,13 @@ const handleSubmit = async (e) => {
               </div>
 
               <div className="flex justify-end -mt-3">
-                <a href="#" className="text-[10px] font-semibold tracking-widest uppercase text-[#acd52b]/70 hover:text-[#c7f248] transition-colors">
+                <a href="/reset-password" className="text-[10px] font-semibold tracking-widest uppercase text-[#acd52b]/70 hover:text-[#c7f248] transition-colors">
                   Forgot password?
                 </a>
               </div>
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={loading}
                 className="group relative w-full bg-[#c7f248] text-[#161f00] font-bold text-[11px] tracking-[0.25em] uppercase p-4 rounded-xl shadow-[0_4px_24px_rgba(199,242,72,0.2)] hover:bg-[#acd52b] hover:-translate-y-0.5 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden flex items-center justify-center gap-2"
               >
@@ -209,8 +129,8 @@ const handleSubmit = async (e) => {
                 <div className="flex-1 h-[1px] bg-white/5" />
               </div>
 
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => loginWithGoogle()}
                 className="w-full bg-white/5 border border-white/10 rounded-xl text-[11px] font-semibold tracking-widest uppercase p-3.5 flex items-center justify-center gap-2.5 hover:bg-white/10 transition-colors"
               >
@@ -225,7 +145,7 @@ const handleSubmit = async (e) => {
             </form>
 
             <div className="mt-7 text-center text-xs text-[#c4c9b0]/45">
-              Don't have an account? 
+              Don't have an account?
               <a href="/register" className="text-[#acd52b] font-semibold ml-1 hover:text-[#c7f248] transition-colors">Register</a>
             </div>
           </div>

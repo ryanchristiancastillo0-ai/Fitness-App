@@ -47,6 +47,7 @@ const notificationRoutes = require('./route/notification');
 const sessionRoutes = require('./route/session')
 const coachRoutes = require('./route/coach')
 const workoutLogRoutes = require('./route/workoutLogs')
+const forgotPasswordRoutes = require('./route/forgotpassword')
 app.use('/api/bmi',       bmiRoutes);
 app.use('/api/auth',      authRoutes);
 app.use('/api',           messengerRoutes);
@@ -69,6 +70,7 @@ app.use('/api/workout-sessions', sessionRoutes);
 app.use('/api/coach', coachRoutes);
 app.use('/api/coach', coachRoutes);
 app.use('/api/workout-logs', workoutLogRoutes);
+app.use('/api/forgot-password', forgotPasswordRoutes);
 // ─── Socket.IO ────────────────────────────────────────────────────────────────
 require('./socket/socketHandler')(io);
 

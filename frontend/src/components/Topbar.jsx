@@ -4,7 +4,7 @@ import Icon from './Icon';
 import { API_BASE_URL } from '../config/port';
 import { useAuth } from '../hooks/useAuth';
 import { useNotification } from '../context/NotificationSystem';
-
+import { SETTINGS_ITEMS } from '../constant/nav';
 const NAV_LINKS = [
   { name: 'Overview', path: '/' },
   { name: 'Meal Tracker', path: '/dashboard/meal-tracker' },
@@ -264,14 +264,7 @@ const Topbar = ({ sidebarExpanded, userId }) => {
     navigate('/login');
   };
 
-  const SETTINGS_ITEMS = [
-    { icon: 'person', label: 'Profile', accent: true, action: () => navigate('/dashboard/profile') },
-    { icon: 'tune', label: 'Preferences', action: () => navigate('dashboard/preferences') },
-    { icon: 'notifications', label: 'Notifications', action: () => navigate('dashboard/notifications') },
-    { icon: 'lock', label: 'Privacy', action: () => navigate('dashboard/privacy') },
-    { icon: 'help_outline', label: 'Help & Support', action: () => window.open('https://support.vitalis.app', '_blank') },
-  ];
-
+ 
   const avatarSrc = userData.avatar_url
     ? userData.avatar_url
     : `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.name}`;

@@ -1,3 +1,5 @@
+import { useState } from "react";
+
  const StatsPanel = ({ metrics, splits, formatTime, isDesktop }) => {
   const [sheetOpen, setSheetOpen] = useState(false);
 

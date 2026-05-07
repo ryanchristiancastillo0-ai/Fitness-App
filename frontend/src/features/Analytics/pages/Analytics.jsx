@@ -13,12 +13,14 @@ import {
   Legend,
 } from 'chart.js';
 import { Line, Bar, Scatter } from 'react-chartjs-2';
-import SidebarAnalytics from '../../../components/sidebarAnalytics';
+
 import { API_BASE_URL } from '../../../config/port';
 import { navList } from '../../../constant/nav';
 import { useAnalyticsState } from '../hooks/useAnalyticsState';
 import { useAnalyticsData } from '../hooks/useAnalyticsData';
 import { useSleepActions } from '../hooks/useSleepActions';
+import { SidebarAnalytics,AnalyticsMobileNav } from '../../../components';
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -246,23 +248,7 @@ function TopNav({ userId }) {
   );
 }
 
-function MobileBottomNav({ navigate }) {
-  return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full bg-[#09090b]/95 backdrop-blur-xl border-t border-white/5 z-[100] flex justify-around items-center py-2 pb-[env(safe-area-inset-bottom,8px)]">
-      {navList.map((list, i) => (
-        <button
-          onClick={() => navigate(list.path)}
-          key={i}
-          className={`flex flex-col items-center justify-center p-2 min-w-[44px] min-h-[44px] rounded-xl transition-colors touch-manipulation ${
-            i === 1 ? 'text-[#D1FD52]' : 'text-neutral-500 active:text-neutral-300'
-          }`}
-        >
-          <Icon name={list.icon} fill={i === 1 ? 1 : 0} className="text-[22px]" />
-        </button>
-      ))}
-    </nav>
-  );
-}
+
 
 function ScatterLegend() {
   return (
@@ -600,7 +586,7 @@ const Analytics = () => {
       <SidebarAnalytics />
 
       {/* Mobile bottom nav: shown below md */}
-      <MobileBottomNav navigate={navigate} />
+      <AnalyticsMobileNav navigate={navigate} />
 
       {/* Main content column */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden

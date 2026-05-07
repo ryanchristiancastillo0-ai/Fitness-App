@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
-import SidebarAnalytics from "../components/sidebarAnalytics";
-import Icon from "../components/Icon";
-import { API_BASE_URL } from "../config/port";
+import SidebarAnalytics from "../../../components/sidebarAnalytics";
+import Icon from "../../../components/Icon";
+import { API_BASE_URL } from "../../../config/port";
+import { AnalyticsMobileNav } from "../../../components";
+import { useNavigate } from "react-router-dom";
 
 const Log = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate()
   const userId = 1; // Replace with your auth logic
 
   useEffect(() => {
@@ -114,6 +117,7 @@ const Log = () => {
           </div>
         </main>
       </div>
+      <AnalyticsMobileNav navigate={navigate} />
     </div>
   );
 };

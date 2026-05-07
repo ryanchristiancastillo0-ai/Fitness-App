@@ -1,3 +1,6 @@
+import { useEffect, useRef } from "react";
+import { useMap } from "react-leaflet";
+
 // ─── Map helpers ──────────────────────────────────────────────────────────────
  const RecenterMap = ({ coords, isRecording, userLocation }) => {
   const map = useMap();

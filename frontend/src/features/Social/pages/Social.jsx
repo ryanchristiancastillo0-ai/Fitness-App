@@ -1,17 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { MobileNav, Sidebar, Topbar } from '../components';
-import { API_BASE_URL } from '../config/port';
-import { useAuth } from '../hooks/useAuth';
+import { MobileNav, Sidebar, Topbar } from '../../../components';
+import { useAuth } from '../../../hooks/useAuth';
+import { useContacts } from '../hooks/useContact';
+import { useMessages } from '../hooks/useMessages';
 
-// Make sure VITE_SOCKET_URL is set in your .env:
-//   VITE_SOCKET_URL=http://localhost:8000
-// And API_BASE_URL in config/port.js should be:
-//   export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000';
-
-// Create socket ONCE outside the component so it doesn't reconnect on re-renders
-const socket = io(SOCKET_URL, { withCredentials: true });
 
 const Icon = ({ name, className = '', fill = 0, weight = 300 }) => (
   <span
@@ -35,16 +29,41 @@ const ClinicalMessenger = () => {
   const userId = user?.id || null;
 
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
-  const [contacts,        setContacts]        = useState([]);
-  const [searchResults,   setSearchResults]   = useState([]);
   const [activeContact,   setActiveContact]   = useState(null);
-  const [messages,        setMessages]        = useState([]);
-  const [inputValue,      setInputValue]      = useState('');
-  const [searchTerm,      setSearchTerm]      = useState('');
-  const [isAiTyping,      setIsAiTyping]      = useState(false);
-  const [loadingMsgs,     setLoadingMsgs]     = useState(false);
 
   const scrollRef = useRef(null);
+  const socketRef = useRef(null);
+
+  // ── Create socket once, disconnect cleanly on unmount ────────────────────
+  useEffect(() => {
+    socketRef.current = io(SOCKET_URL, { withCredentials: true });
+    return () => {
+      socketRef.current.disconnect();
+    };
+  }, []);
+
+  // ── Join socket room ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!userId || !socketRef.current) return;
+    socketRef.current.emit('join-room', userId);
+  }, [userId]);
+
+  const {
+    contacts,
+    searchTerm,
+    setSearchTerm,
+    searchResults,
+    handleAddFriend,
+  } = useContacts(userId);
+
+  const {
+    messages,
+    inputValue,
+    setInputValue,
+    isAiTyping,
+    loadingMsgs,
+    handleSendMessage,
+  } = useMessages(userId, activeContact, user, socketRef);
 
   // ── Auto-scroll on new messages ──────────────────────────────────────────
   useEffect(() => {
@@ -52,189 +71,6 @@ const ClinicalMessenger = () => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isAiTyping]);
-
-  // ── Join socket room ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!userId) return;
-    socket.emit('join-room', userId);
-  }, [userId]);
-
-  // ── Load friends from DB ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!userId) return;
-    const fetchContacts = async () => {
-      try {
-        const res  = await fetch(`${API_BASE_URL}/api/contacts/${userId}`, { credentials: 'include' });
-        const data = await res.json();
-        setContacts(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Error loading contacts:', err);
-      }
-    };
-    fetchContacts();
-  }, [userId]);
-
-  // ── Load message history when active contact changes ─────────────────────
-  useEffect(() => {
-    if (!activeContact) return;
-
-    if (activeContact.id === 'ai-bot') {
-      setMessages([{
-        content: `Hello ${user?.name ?? ''}! I'm Vitalis AI. How can I assist you with your clinical goals today?`,
-        time:    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isMe:    0,
-      }]);
-      return;
-    }
-
-    const fetchMessages = async () => {
-      setLoadingMsgs(true);
-      try {
-        const res  = await fetch(
-          `${API_BASE_URL}/api/messages/${userId}/${activeContact.id}`,
-          { credentials: 'include' }
-        );
-        const data = await res.json();
-        setMessages(Array.isArray(data) ? data.map(m => ({ ...m, isMe: Number(m.isMe) })) : []);
-      } catch (err) {
-        console.error('Error loading messages:', err);
-        setMessages([]);
-      } finally {
-        setLoadingMsgs(false);
-      }
-    };
-    fetchMessages();
-
-    // ── Real-time socket listener for this conversation ──────────────────
-    const handleNewMessage = (newMsg) => {
-      if (
-        newMsg.sender_id === activeContact.id ||
-        newMsg.receiver_id === activeContact.id
-      ) {
-        setMessages(prev => [
-          ...prev,
-          { ...newMsg, isMe: newMsg.sender_id === userId ? 1 : 0 },
-        ]);
-      }
-    };
-    socket.on('receive-chat', handleNewMessage);
-    return () => socket.off('receive-chat', handleNewMessage);
-  }, [activeContact, userId]);
-
-  // ── Debounced user search ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!searchTerm.trim()) { setSearchResults([]); return; }
-    const timer = setTimeout(async () => {
-      try {
-        const res  = await fetch(
-          `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(searchTerm)}&excludeId=${userId}`,
-          { credentials: 'include' }
-        );
-        const data = await res.json();
-        setSearchResults(
-          Array.isArray(data) ? data.filter(r => !contacts.some(c => c.id === r.id)) : []
-        );
-      } catch (err) {
-        console.error('Search error:', err);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, userId, contacts]);
-
-  // ── Send message ──────────────────────────────────────────────────────────
-  const handleSendMessage = useCallback(async () => {
-    if (!inputValue.trim() || !activeContact) return;
-
-    const content = inputValue.trim();
-    setInputValue('');
-
-    // Optimistic UI: show message immediately before server confirms
-    const optimistic = {
-      content,
-      time:  new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isMe:  1,
-      _temp: true,
-    };
-    setMessages(prev => [...prev, optimistic]);
-
-    // ── AI path ───────────────────────────────────────────────────────────
-    if (activeContact.id === 'ai-bot') {
-      setIsAiTyping(true);
-      try {
-        const res  = await fetch(`${API_BASE_URL}/api/ai-chat`, {
-          method:      'POST',
-          headers:     { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body:        JSON.stringify({ message: content, userId }),
-        });
-        if (!res.ok) throw new Error(`AI API error: ${res.status}`);
-        const data = await res.json();
-        setMessages(prev => [...prev, {
-          content: data.reply || 'System Error: Unable to reach AI pipeline.',
-          time:    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMe:    0,
-        }]);
-      } catch (err) {
-        console.error('AI chat error:', err);
-        setMessages(prev => [...prev, {
-          content: 'System Error: Unable to reach AI pipeline.',
-          time:    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMe:    0,
-        }]);
-      } finally {
-        setIsAiTyping(false);
-      }
-      return;
-    }
-
-    // ── Human path: save to DB first, then socket emit ────────────────────
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/messages`, {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body:        JSON.stringify({ sender_id: userId, receiver_id: activeContact.id, content }),
-      });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
-      const saved = await res.json();
-
-      // Replace optimistic with DB-confirmed message (has real id + timestamp)
-      setMessages(prev =>
-        prev.map(m => (m._temp && m.content === content) ? { ...saved, isMe: 1 } : m)
-      );
-
-      // Broadcast to receiver's socket room
-      socket.emit('send-chat', {
-        ...saved,
-        sender_id:   userId,
-        receiver_id: activeContact.id,
-      });
-    } catch (err) {
-      console.error('Send message error:', err);
-      // Mark the optimistic message as failed
-      setMessages(prev =>
-        prev.map(m => (m._temp && m.content === content) ? { ...m, failed: true } : m)
-      );
-    }
-  }, [inputValue, activeContact, userId]);
-
-  // ── Add friend ────────────────────────────────────────────────────────────
-  const handleAddFriend = async (friendUser) => {
-    setContacts(prev => [friendUser, ...prev]);
-    setActiveContact(friendUser);
-    setSearchTerm('');
-    setSearchResults([]);
-    try {
-      await fetch(`${API_BASE_URL}/api/friends/add`, {
-        method:      'POST',
-        headers:     { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body:        JSON.stringify({ userId, friendId: friendUser.id }),
-      });
-    } catch (err) {
-      console.error('Failed to save friend:', err);
-    }
-  };
 
   if (loading) return null;
 
@@ -286,7 +122,7 @@ const ClinicalMessenger = () => {
                       <span className="text-sm font-medium">{u.name}</span>
                     </div>
                     <button
-                      onClick={() => handleAddFriend(u)}
+                      onClick={() => handleAddFriend(u, setActiveContact)}
                       className="flex items-center gap-1 px-2 py-1 bg-[#c7f248] text-black rounded-md text-[10px] font-bold hover:scale-105 transition-transform"
                     >
                       <Icon name="person_add" weight={600} className="text-xs" /> ADD
