@@ -31,9 +31,10 @@ export const useContacts = (userId) => {
           { credentials: 'include' }
         );
         const data = await res.json();
-        setSearchResults(
-          Array.isArray(data) ? data.filter(r => !contacts.some(c => String(c.id) === String(r.id))) : []
-        );
+      setSearchResults(Array.isArray(data) ? data : []);
+console.log('search raw data:', data);          // what the backend returned
+console.log('current contacts:', contacts);     // what contacts look like
+        
       } catch (err) {
         console.error('Search error:', err);
       }
