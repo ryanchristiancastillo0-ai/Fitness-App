@@ -5,6 +5,8 @@ import { API_BASE_URL } from '../config/port';
 import { useAuth } from '../hooks/useAuth';
 import { useNotification } from '../context/NotificationSystem';
 import { SETTINGS_ITEMS } from '../constant/nav';
+import { createPortal } from 'react-dom';
+
 const NAV_LINKS = [
   { name: 'Overview', path: '/' },
   { name: 'Meal Tracker', path: '/dashboard/meal-tracker' },
@@ -14,39 +16,50 @@ const NAV_LINKS = [
 // ── Notification Overlay ─────────────────────────────────────────────────────
 function NotificationOverlay({ notifications, onMarkRead, onMarkAllRead, onClose }) {
   const [filter, setFilter] = useState('recent');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Lock body scroll on mobile
+  useEffect(() => {
+    if (isMobile) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [isMobile]);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
   const displayed = filter === 'recent' ? notifications.slice(0, 10) : notifications;
 
-  return (
-    <div className="absolute right-0 top-[calc(100%+10px)] w-[min(380px,92vw)] bg-[#181818] border border-white/[0.08] rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] overflow-hidden z-50">
-
+  const innerContent = (
+    <>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.06] bg-[#1e1e1e]">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-[#1e1e1e]">
+        <div className="flex items-center gap-2">
           <Icon name="notifications" className="text-[#D1FD52] text-[16px]" />
-          
-          <span className="text-[13px] sm:text-[14px] font-bold text-[#e5e2e1] tracking-tight">Notifications</span>
+          <span className="text-[13px] font-bold text-[#e5e2e1] tracking-tight">Notifications</span>
           {unreadCount > 0 && (
-            <span className="text-[9px] sm:text-[10px] font-black bg-[#D1FD52] text-[#131313] px-1.5 py-0.5 rounded-full leading-none">
+            <span className="text-[10px] font-black bg-[#D1FD52] text-[#131313] px-1.5 py-0.5 rounded-full leading-none">
               {unreadCount}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onMarkAllRead}
-            className="text-[10px] sm:text-[11px] text-[#D1FD52]/80 hover:text-[#D1FD52] transition-colors bg-transparent border-none cursor-pointer font-medium whitespace-nowrap"
+            className="text-[11px] text-[#D1FD52]/80 hover:text-[#D1FD52] transition-colors bg-transparent border-none cursor-pointer font-medium whitespace-nowrap px-1"
           >
             Mark all read
           </button>
-          {/* ✅ Fixed close button */}
           <button
             onClick={onClose}
-            className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.05] hover:bg-white/[0.1] transition-colors border-none cursor-pointer ml-1"
+            className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/[0.05] hover:bg-white/[0.1] transition-colors border-none cursor-pointer"
           >
-             <Icon name="close" className="text-[#888] text-[14px]" />
-          
+            <Icon name="close" className="text-[#888] text-[14px]" />
           </button>
         </div>
       </div>
@@ -56,67 +69,60 @@ function NotificationOverlay({ notifications, onMarkRead, onMarkAllRead, onClose
         {['recent', 'all'].map(tab => (
           <button
             key={tab}
-            onClick={() => setFilter(tab)}
-            className={`flex-1 py-2.5 text-[11px] sm:text-[12px] font-semibold transition-all border-none cursor-pointer
+            onClick={(e) => {
+              e.stopPropagation();
+              setFilter(tab);
+            }}
+            className={`flex-1 py-2.5 text-[12px] font-semibold transition-all border-none cursor-pointer
               ${filter === tab
                 ? 'text-[#D1FD52] border-b-2 border-[#D1FD52] bg-[#D1FD52]/[0.05]'
                 : 'text-[#555] hover:text-[#888] bg-transparent'
               }`}
           >
-            {tab === 'recent' ? 'Recent' : `All  (${notifications.length})`}
+            {tab === 'recent' ? 'Recent' : `All (${notifications.length})`}
           </button>
         ))}
       </div>
 
       {/* List */}
-      <div className="max-h-[52vh] sm:max-h-[360px] overflow-y-auto">
+      <div className="overflow-y-auto" style={{ maxHeight: isMobile ? '55dvh' : '340px' }}>
         {displayed.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-3">
-            <span className="material-icons text-[36px] text-[#2a2a2a]">notifications_none</span>
-            <p className="text-[11px] sm:text-[12px] text-[#444] m-0 font-medium">No notifications yet</p>
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <span className="material-icons text-[40px] text-[#2a2a2a]">notifications_none</span>
+            <p className="text-[12px] text-[#444] m-0 font-medium">No notifications yet</p>
           </div>
         ) : (
           displayed.map((notif) => (
             <div
               key={notif.id}
-              onClick={() => !notif.is_read && onMarkRead(notif.id)}
-              className={`flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] transition-all duration-150
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!notif.is_read) onMarkRead(notif.id);
+              }}
+              className={`flex items-start gap-3 px-4 py-3.5 border-b border-white/[0.04] transition-all duration-150
                 ${notif.is_read
                   ? 'bg-[#141414] cursor-default'
-                  : 'bg-[#D1FD52]/[0.03] hover:bg-[#D1FD52]/[0.06] cursor-pointer'
+                  : 'bg-[#D1FD52]/[0.03] active:bg-[#D1FD52]/[0.08] hover:bg-[#D1FD52]/[0.06] cursor-pointer'
                 }`}
             >
-              {/* Dot */}
               <div className="mt-1.5 shrink-0">
-                {notif.is_read ? (
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#2a2a2a] border border-white/10" />
-                ) : (
-                  <div className="w-2 h-2 rounded-full bg-[#D1FD52] shadow-[0_0_6px_#D1FD52] animate-pulse" />
-                )}
+                {notif.is_read
+                  ? <div className="w-1.5 h-1.5 rounded-full bg-[#2a2a2a] border border-white/10" />
+                  : <div className="w-2 h-2 rounded-full bg-[#D1FD52] shadow-[0_0_6px_#D1FD52] animate-pulse" />
+                }
               </div>
-
-              {/* Content */}
               <div className="flex-1 min-w-0">
-                <p className={`text-[11px] sm:text-[12px] leading-relaxed m-0 break-words font-medium
-                  ${notif.is_read ? 'text-[#555]' : 'text-[#ddd]'}`}>
+                <p className={`text-[12px] leading-relaxed m-0 break-words font-medium ${notif.is_read ? 'text-[#555]' : 'text-[#ddd]'}`}>
                   {notif.message}
                 </p>
-                <p className={`text-[9px] sm:text-[10px] mt-1 m-0 font-medium
-                  ${notif.is_read ? 'text-[#333]' : 'text-[#555]'}`}>
+                <p className={`text-[10px] mt-1 m-0 font-medium ${notif.is_read ? 'text-[#333]' : 'text-[#555]'}`}>
                   {new Date(notif.created_at).toLocaleString()}
                 </p>
               </div>
-
-              {/* Badge */}
-              {!notif.is_read ? (
-                <span className="shrink-0 mt-1 text-[9px] font-black bg-[#D1FD52]/20 text-[#D1FD52] px-1.5 py-0.5 rounded-full whitespace-nowrap border border-[#D1FD52]/20">
-                  NEW
-                </span>
-              ) : (
-                <span className="shrink-0 mt-1 text-[9px] font-medium text-[#333] whitespace-nowrap">
-                  read
-                </span>
-              )}
+              {!notif.is_read
+                ? <span className="shrink-0 mt-1 text-[9px] font-black bg-[#D1FD52]/20 text-[#D1FD52] px-1.5 py-0.5 rounded-full whitespace-nowrap border border-[#D1FD52]/20">NEW</span>
+                : <span className="shrink-0 mt-1 text-[9px] font-medium text-[#333] whitespace-nowrap">read</span>
+              }
             </div>
           ))
         )}
@@ -124,24 +130,67 @@ function NotificationOverlay({ notifications, onMarkRead, onMarkAllRead, onClose
 
       {/* Footer */}
       <div className="px-4 py-2.5 border-t border-white/[0.05] bg-[#161616] flex items-center justify-between">
-        <span className="text-[10px] sm:text-[11px] font-medium text-[#444]">
+        <span className="text-[11px] font-medium">
           {unreadCount > 0
             ? <span className="text-[#D1FD52]/70">{unreadCount} unread</span>
             : <span className="text-[#3a3a3a]">All caught up ✓</span>
           }
         </span>
-        <span className="text-[10px] text-[#333]">
-          {notifications.length} total
-        </span>
+        <span className="text-[10px] text-[#333]">{notifications.length} total</span>
       </div>
+    </>
+  );
+
+  // ── Mobile: centered modal via portal ──
+  if (isMobile) {
+    return createPortal(
+      <div
+        id="notif-portal"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          background: 'rgba(0,0,0,0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 16px',
+        }}
+        onMouseDown={(e) => {
+          // Only close if clicking the backdrop itself, not children
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '400px',
+            maxHeight: '80dvh',
+            background: '#181818',
+            borderRadius: '16px',
+            border: '1px solid rgba(255,255,255,0.08)',
+            overflow: 'hidden',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.8)',
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {innerContent}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  // ── Desktop: dropdown ──
+  return (
+    <div className="absolute right-0 top-[calc(100%+10px)] w-[380px] bg-[#181818] border border-white/[0.08] rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] overflow-hidden z-50">
+      {innerContent}
     </div>
   );
 }
 
 // ── Topbar ───────────────────────────────────────────────────────────────────
 const Topbar = ({ sidebarExpanded, userId }) => {
-  
-
   const navigate = useNavigate();
   const { addToast } = useNotification();
   const { logout } = useAuth();
@@ -178,12 +227,28 @@ const Topbar = ({ sidebarExpanded, userId }) => {
     }
   }, [userId]);
 
-  // Close dropdowns when clicking outside
+  // ✅ Fixed: check if click is inside the portal before closing notif
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target)) setSettingsOpen(false);
-      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+      // Don't close notif if the portal is open — portal handles its own closing
+      const portalEl = document.getElementById('notif-portal');
+      if (portalEl) return;
+
+      if (
+        notifRef.current &&
+        !notifRef.current.contains(e.target)
+      ) {
+        setNotifOpen(false);
+      }
+
+      if (
+        settingsRef.current &&
+        !settingsRef.current.contains(e.target)
+      ) {
+        setSettingsOpen(false);
+      }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -264,7 +329,6 @@ const Topbar = ({ sidebarExpanded, userId }) => {
     navigate('/login');
   };
 
- 
   const avatarSrc = userData.avatar_url
     ? userData.avatar_url
     : `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.name}`;

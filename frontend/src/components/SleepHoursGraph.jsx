@@ -306,11 +306,16 @@ export const SleepHoursGraph = ({ userId = null }) => {
                   <stop offset="100%" stopColor={accentColor} stopOpacity="0" />
                 </linearGradient>
               </defs>
-              <path
-                d={`${pathData} V200 H0 Z`}
-                fill={`url(#${gradId})`}
-                className="transition-all duration-700"
-              />
+
+              {/* ── FIX: only render fill path when pathData is non-empty ── */}
+              {pathData && (
+                <path
+                  d={`${pathData} V200 H0 Z`}
+                  fill={`url(#${gradId})`}
+                  className="transition-all duration-700"
+                />
+              )}
+
               <path
                 d={pathData}
                 fill="none"

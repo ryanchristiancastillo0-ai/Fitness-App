@@ -169,9 +169,7 @@ const CameraWorkout = () => {
         className={`flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden transition-all duration-300
           ${sidebarExpanded ? 'md:ml-[240px]' : 'md:ml-[72px]'}`}
       >
-        <MobileWorkoutPills workoutType={workoutType} onSelect={handleWorkoutChange} />
-        <DesktopWorkoutSelector workoutType={workoutType} onSelect={handleWorkoutChange} />
-
+        {/* ── SessionHeader FIRST so it sticks to top ── */}
         <SessionHeader
           workoutType={workoutType}
           isRecording={isRecording}
@@ -181,6 +179,10 @@ const CameraWorkout = () => {
           onCameraToggle={handleCameraToggle}
           onVoiceToggle={handleVoiceToggle}
         />
+
+        {/* ── Exercise selectors sit BELOW the sticky header ── */}
+        <MobileWorkoutPills workoutType={workoutType} onSelect={handleWorkoutChange} />
+        <DesktopWorkoutSelector workoutType={workoutType} onSelect={handleWorkoutChange} />
 
         <main className="p-3 sm:p-4 md:p-8 max-w-[1600px] mx-auto w-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">

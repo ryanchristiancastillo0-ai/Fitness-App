@@ -48,18 +48,10 @@ function checkRateLimit(email) {
 
   const remaining = record.lockedUntil - Date.now();
   if (remaining <= 0) {
-    // Lock expired — reset if we're still in the lower tier, 
-    // but keep count if they hit 20 (full reset only on success)
-    if (record.count >= 20) {
-      // After 30-min lock expires, reset to 0 so they get a fresh start
-      loginAttempts.set(email, { count: 0, lockedUntil: null });
-    } else {
-      loginAttempts.set(email, { count: 0, lockedUntil: null });
-    }
+    loginAttempts.set(email, { count: 0, lockedUntil: null });
     return null;
   }
 
-  // Still locked — build friendly message
   if (record.count >= 20) {
     const mins = Math.ceil(remaining / 60000);
     return {
@@ -76,25 +68,36 @@ function checkRateLimit(email) {
 }
 
 // ─────────────────────────────────────────────
-//  COOKIE HELPER
+//  COOKIE HELPER — works for localhost AND dev tunnels
 // ─────────────────────────────────────────────
-const isProduction = process.env.NODE_ENV === 'production';
 const COOKIE_NAME = 'vitalis_session';
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: isProduction, 
-  sameSite: isProduction ? 'none' : 'lax', // 🔥 FIX
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: '/',
-};
 
-function setSessionCookie(res, userId, email) {
+function getCookieOptions(req) {
+  // Dev tunnels use HTTPS even in dev, so check the actual request protocol
+  // not just NODE_ENV. req.secure works because we set 'trust proxy' = 1 in server.js
+  const isSecure =
+    req.secure ||
+    req.headers['x-forwarded-proto'] === 'https' ||
+    process.env.NODE_ENV === 'production';
+
+  return {
+    httpOnly: true,
+    secure: isSecure,
+    // 'none' required for cross-origin cookies (tunnel URL ≠ backend URL)
+    // 'lax' is fine only when frontend and backend are same origin (localhost dev)
+    sameSite: isSecure ? 'none' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
+  };
+}
+
+function setSessionCookie(res, userId, email, req) {
   const token = jwt.sign(
     { id: userId, email },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
-  res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+  res.cookie(COOKIE_NAME, token, getCookieOptions(req));
   return token;
 }
 
@@ -103,7 +106,7 @@ function setSessionCookie(res, userId, email) {
 // ─────────────────────────────────────────────
 router.get('/me', (req, res) => {
   const token = req.cookies?.[COOKIE_NAME];
-
+    
   if (!token) {
     return res.status(401).json({ message: 'Not authenticated' });
   }
@@ -112,7 +115,7 @@ router.get('/me', (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     res.json({ id: decoded.id, email: decoded.email });
   } catch (err) {
-    res.clearCookie(COOKIE_NAME);
+    res.clearCookie(COOKIE_NAME, getCookieOptions(req)); // ✅ dynamic options
     return res.status(401).json({ message: 'Session expired' });
   }
 });
@@ -129,8 +132,8 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email already registered in Vitalis labs.' });
     }
 
-    const salt       = await bcrypt.genSalt(10);
-    const hashedPw   = await bcrypt.hash(password, salt);
+    const salt     = await bcrypt.genSalt(10);
+    const hashedPw = await bcrypt.hash(password, salt);
 
     await db.execute(
       'INSERT INTO users (name, email, password, fitness_goal, is_online) VALUES (?, ?, ?, ?, ?)',
@@ -143,7 +146,9 @@ router.post('/register', async (req, res) => {
   }
 });
 
-
+// ─────────────────────────────────────────────
+//  SESSION LOGGER
+// ─────────────────────────────────────────────
 const logUserSession = async (req, userId) => {
   try {
     const parser = new UAParser(req.headers['user-agent']);
@@ -167,12 +172,11 @@ const logUserSession = async (req, userId) => {
     );
 
     await db.execute(
-      `INSERT INTO user_sessions 
-      (user_id, device, browser, os, ip_address, location, is_current)
-      VALUES (?, ?, ?, ?, ?, ?, true)`,
+      `INSERT INTO user_sessions
+       (user_id, device, browser, os, ip_address, location, is_current)
+       VALUES (?, ?, ?, ?, ?, ?, true)`,
       [userId, device, browser, os, ip, location]
     );
-
   } catch (err) {
     console.error('SESSION LOG ERROR:', err);
   }
@@ -208,7 +212,6 @@ router.post('/login', async (req, res) => {
     if (!isMatch) {
       const attempts = recordFailedAttempt(email);
 
-      // Build a contextual hint (don't expose the exact count for security)
       let hint = 'Invalid credentials';
       if (attempts >= 20) {
         hint = 'Too many failed attempts. Try again in 30 minutes.';
@@ -223,7 +226,7 @@ router.post('/login', async (req, res) => {
     clearAttempts(email);
     await db.execute('UPDATE users SET is_online = 1 WHERE id = ?', [user.id]);
 
-    setSessionCookie(res, user.id, user.email);
+    setSessionCookie(res, user.id, user.email, req); // ✅ pass req
     await logUserSession(req, user.id);
 
     // Return user info (NO token in body — it lives in the HttpOnly cookie)
@@ -253,21 +256,21 @@ router.post('/google-login', async (req, res) => {
     });
 
     const ticket = await googleClient.verifyIdToken({
-      idToken:                    tokens.id_token,
-      audience:                   process.env.GOOGLE_CLIENT_ID,
+      idToken:                     tokens.id_token,
+      audience:                    process.env.GOOGLE_CLIENT_ID,
       maxAllowedTimeSkewInSeconds: 50,
     });
 
-    const payload              = ticket.getPayload();
+    const payload                  = ticket.getPayload();
     const { email, name, picture } = payload;
 
     const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
     let user;
 
     if (users.length === 0) {
-      const salt          = await bcrypt.genSalt(10);
+      const salt           = await bcrypt.genSalt(10);
       const randomHashedPw = await bcrypt.hash(Math.random().toString(36).slice(-10), salt);
-      const defaultGoal   = 'Unspecified (Google Auth)';
+      const defaultGoal    = 'Unspecified (Google Auth)';
 
       const [insertResult] = await db.execute(
         'INSERT INTO users (name, email, password, fitness_goal, is_online, avatar_url) VALUES (?, ?, ?, ?, ?, ?)',
@@ -281,8 +284,7 @@ router.post('/google-login', async (req, res) => {
       await db.execute('UPDATE users SET is_online = 1 WHERE id = ?', [user.id]);
     }
 
-    // ✅ Cookie-based session — no token in body
-    setSessionCookie(res, user.id, user.email);
+    setSessionCookie(res, user.id, user.email, req); // ✅ pass req
 
     res.json({
       id:     user.id,
@@ -301,9 +303,8 @@ router.post('/google-login', async (req, res) => {
 //  POST /api/auth/logout
 // ─────────────────────────────────────────────
 router.post('/logout', async (req, res) => {
-  // Read user from cookie to get the ID for DB update
   const token = req.cookies?.[COOKIE_NAME];
-  
+
   if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -313,13 +314,7 @@ router.post('/logout', async (req, res) => {
     }
   }
 
-
-res.clearCookie(COOKIE_NAME, {
-  httpOnly: true,
-  secure: isProduction,
-  sameSite: isProduction ? 'none' : 'lax',
-  path: '/',
-});
+  res.clearCookie(COOKIE_NAME, getCookieOptions(req)); // ✅ dynamic options, matches set
   res.json({ success: true, message: 'User logged out.' });
 });
 

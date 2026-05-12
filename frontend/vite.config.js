@@ -26,26 +26,26 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            // Map tiles
             urlPattern: /https:\/\/.*basemaps\.cartocdn\.com\/.*/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'map-tiles',
               expiration: {
                 maxEntries: 500,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+                maxAgeSeconds: 60 * 60 * 24 * 7,
               },
             },
           },
           {
-            // Your API — network first, fall back to cache
-            urlPattern: /\/api\/.*/,
+            // ✅ Updated to match full tunnel URL instead of relative /api
+             urlPattern: /http:\/\/localhost:8000\/api\/.*/,
+            // urlPattern: /https:\/\/mv4cjrhd-8000\.asse\.devtunnels\.ms\/api\/.*/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24, // 1 day
+                maxAgeSeconds: 60 * 60 * 24,
               },
               networkTimeoutSeconds: 5,
             },
@@ -58,12 +58,6 @@ export default defineConfig({
     exclude: ['@mediapipe/pose'],
   },
   server: {
-    headers: {},
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-    },
+    
   },
 })
